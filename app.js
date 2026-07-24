@@ -924,34 +924,24 @@ function legacyCopy(el, done) {
   document.execCommand('copy'); sel.removeAllRanges(); done();
 }
 
-/* ─── 微信杂志风 HTML 渲染（马卡龙色板）─── */
+/* ─── 微信杂志风 HTML 渲染（table布局，微信兼容）─── */
 function renderMagazineHTML(md, overrideTitle) {
   const title = overrideTitle || '推文标题';
 
-  // 预处理：去掉 markdown 粗体标记，方便正则提取信息卡字段
+  // 预处理：去掉 markdown 粗体标记
   const cleanMd = md.replace(/\*\*(.+?)\*\*/g, '$1');
   const author = (cleanMd.match(/作者\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const rating = (cleanMd.match(/分级\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const cp = (cleanMd.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const tags = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.trim()).filter(Boolean);
-
-  // 分章节（从 ### 01 开始，跳过信息卡部分）
-  const sections = parseSections(md);
-  // 分离出"小说哪里看"资源链接（在第一个 ### 之前的文字）
-  const firstSectionIdx = md.search(/\n###\s+/);
-  const headerPart = firstSectionIdx > 0 ? md.slice(0, firstSectionIdx) : md;
-
-  // 信息卡字段
-  const infoLines = headerPart.split('\n').map(l => l.trim()).filter(Boolean);
+  const workTitle = (cleanMd.match(/原作\s*[:：]\s*(.+)/)?.[1] || '').replace(/[《》]/g, '').trim();
 
   // 小说链接
   const novelLink = (md.match(/【小说在哪看】[^\n]+/)?.[0] || '').replace(/【小说在哪看】/, '').trim();
   const collectionLink = (md.match(/【已推小说合集】[^\n]+/)?.[0] || '').replace(/【已推小说合集】/, '').trim();
 
-  // 标签
-  const tagsHtml = tags.length ? `<span style="display:inline-block;margin:0 8px 6px 0;">${tags.map(t => `<span style="display:inline-block;padding:4px 12px;background:#dcecf8;color:#2d72ad;border-radius:20px;font-size:12px;font-weight:500;margin-right:6px;">${escapeHtml(t)}</span>`).join('')}</span>` : '';
-
-  // 章节渲染
+  // 分章节
+  const sections = parseSections(md);
   const sectionLabels = ['文案推荐', 'Fanst 碎碎念', '名场面预警', '最戳我的一个细节', '综合评价',
     '避雷点', '踩雷预警', '最戳我的一个槽点'];
   const labelNums = {
@@ -965,46 +955,53 @@ function renderMagazineHTML(md, overrideTitle) {
     if (sec) sectionHtml += renderSectionForMagazine(labelNums[label], label, sec.body);
   });
 
-  // 资源链接（小说哪里看）
+  // 标签
+  const tagsHtml = tags.length ? tags.map(t =>
+    `<span style="display:inline-block;padding:3px 12px;background:#eef5fb;color:#2d72ad;border-radius:20px;font-size:12px;margin:0 6px 4px 0;">${escapeHtml(t)}</span>`
+  ).join('') : '';
+
+  // 资源链接
   const resourceHtml = (novelLink || collectionLink) ? `
-    <p style="margin-bottom:12px;line-height:1.8;">
-      ${novelLink ? `<span style="display:block;margin-bottom:6px;">📖 <strong>小说在哪看</strong>：${escapeHtml(novelLink)}</span>` : ''}
-      ${collectionLink ? `<span style="display:block;">📚 <strong>已推小说合集</strong>：${escapeHtml(collectionLink)}</span>` : ''}
-    </p>` : '';
+    <span style="display:block;margin-bottom:4px;">📖 <strong>小说在哪看</strong>：${escapeHtml(novelLink || '小说阅读途径 →')}</span>
+    <span style="display:block;">📚 <strong>已推小说合集</strong>：${escapeHtml(collectionLink || '已推小说合集 →')}</span>` : '';
 
   return `
-    <div style="max-width:100%;margin:0 auto;background:#fafcfd;font-size:15px;line-height:1.85;color:#3a3a3a;">
+<table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:640px;width:100%;background:#fafcfd;">
 
-      <!-- 角色图占位 -->
-      <p style="margin:0;padding:60px 0;text-align:center;background:linear-gradient(135deg,#c8ddf5,#a8cdf0,#f5d8e2,#fad2e0);font-size:13px;color:rgba(59,130,197,0.5);">📷 在此插入角色图片</p>
-      <p style="margin:0;height:3px;background:#3B82C5;font-size:0;line-height:0;">&nbsp;</p>
+  <!-- 角色图占位 -->
+  <tr><td style="padding:0;">
+    <p style="margin:0;padding:60px 0;text-align:center;font-size:13px;color:rgba(59,130,197,0.5);background:linear-gradient(135deg,#c8ddf5,#a8cdf0,#f5d8e2,#fad2e0);">📷 在此插入角色图片</p>
+    <p style="margin:0;height:3px;background:#3B82C5;font-size:0;line-height:0;">&nbsp;</p>
+  </td></tr>
 
-      <!-- 信息卡 -->
-      <p style="margin:0;padding:0 16px;">
-        ${infoLines.filter(l => !/^[-*_]/.test(l) && !/【小说|【已推/.test(l) && !/基本信息卡/.test(l) && !/^\*\*/.test(l)).map(l => {
-          const m = l.match(/^- (.+?)[:：](.+)/);
-          if (m) return `<span style="margin-right:20px;font-size:14px;"><span style="color:#888;">${escapeHtml(m[1].trim())}</span> <span style="color:#1a1a1a;font-weight:500;">${escapeHtml(m[2].trim())}</span></span>`;
-          return '';
-        }).filter(Boolean).join('');
-        }
-      </p>
-      ${tagsHtml ? `<p style="margin:0;padding:10px 16px 0 16px;">${tagsHtml}</p>` : ''}
+  <!-- 信息卡 -->
+  <tr><td style="padding:18px 16px 14px 16px;background:#fff;">
+    <p style="margin:0;font-size:14px;line-height:2.2;color:#3a3a3a;">
+      ${rating ? `<span style="color:#888;font-size:13px;">分级</span> <span style="color:#3B82C5;">${escapeHtml(rating)}</span><br>` : ''}
+      ${workTitle ? `<span style="color:#888;font-size:13px;">原作</span> <span style="color:#1a1a1a;">《${escapeHtml(workTitle)}》</span><br>` : ''}
+      ${cp ? `<span style="color:#888;font-size:13px;">CP</span> <span style="color:#3B82C5;">${escapeHtml(cp)}</span><br>` : ''}
+      ${author ? `<span style="color:#888;font-size:13px;">作者</span> <span style="color:#1a1a1a;">${escapeHtml(author)}</span>` : ''}
+    </p>
+    ${tagsHtml ? `<p style="margin:10px 0 0 0;line-height:2;">${tagsHtml}</p>` : ''}
+  </td></tr>
 
-      <!-- 资源链接 -->
-      <p style="margin:0;padding:16px 16px 8px 16px;font-size:14px;border-top:1px solid #e0e0e0;margin-top:14px;">${resourceHtml}</p>
+  <!-- 小说链接 -->
+  ${resourceHtml ? `<tr><td style="padding:14px 16px;font-size:13px;line-height:1.8;color:#3a3a3a;">${resourceHtml}</td></tr>` : ''}
 
-      <!-- 正文章节 -->
-      ${sectionHtml}
+  <!-- 正文章节 -->
+  ${sectionHtml}
 
-      <!-- 收尾 -->
-      <p style="margin:0;padding:24px 16px 24px 16px;text-align:center;background:linear-gradient(180deg,#fdf2f5,#eef5fb);font-size:12px;color:#888;line-height:2;">
-        所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。
-      </p>
-      <p style="margin:0;padding:0 16px 20px 16px;text-align:center;background:#eef5fb;">
-        <span style="display:inline-block;padding:10px 24px;background:#fff;border:2px solid #E8739A;border-radius:6px;font-size:14px;color:#E8739A;">💬 非常需要你的推荐留言或观后感！</span>
-      </p>
-      <p style="margin:0;padding:12px 16px 12px 16px;text-align:center;font-size:11px;color:#b8c8d5;">磕学家 · 哈利波特板块</p>
-    </div>`;
+  <!-- 收尾 -->
+  <tr><td style="padding:28px 16px 24px 16px;text-align:center;background:linear-gradient(180deg,#fdf2f5,#eef5fb);">
+    <p style="margin:0 0 16px 0;font-size:12px;line-height:2;color:#888;">
+      所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。
+    </p>
+    <table cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:10px 24px;background:#fff;border:1px solid #E8739A;border-radius:6px;">
+      <p style="margin:0;font-size:14px;color:#E8739A;">💬 非常需要你的推荐留言或观后感！</p>
+    </td></tr></table>
+  </td></tr>
+
+</table>`;
 }
 
 function parseSections(md) {
@@ -1025,11 +1022,13 @@ function parseSections(md) {
 function renderSectionForMagazine(num, label, body) {
   const bodyHtml = renderWeChatBody(body);
   return `
-    <p style="margin:0;padding:0 16px 8px 16px;border-top:1px solid #efe8db;padding-top:20px;">
-      <span style="font-size:36px;font-weight:700;line-height:1;color:#3B82C5;margin-right:10px;">${num}</span>
-      <span style="font-size:18px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
+  <tr><td style="padding:0 16px;">
+    <p style="margin:20px 0 4px 0;">
+      <span style="font-size:36px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
+      <span style="font-size:18px;font-weight:700;color:#1a1a1a;margin-left:8px;">${escapeHtml(label)}</span>
     </p>
-    <p style="margin:0;padding:0 16px 0 16px;font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</p>`;
+    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</p>
+  </td></tr>`;
 }
 
 function renderWeChatBody(body) {
