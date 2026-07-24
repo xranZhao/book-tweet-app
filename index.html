@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>推文助手</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div><h1>推文助手</h1><div class="sub">一本书 · 一篇推文</div></div>
+      <button class="btn btn-ghost" id="btn-settings" style="padding:6px 10px;font-size:13px;">⚙️</button>
+    </header>
+    <main id="main"></main>
+    <nav class="app-nav" id="nav">
+      <button data-tab="upload" class="active"><span class="icon">📤</span><span>上传</span></button>
+      <button data-tab="reading"><span class="icon">📖</span><span>阅读</span></button>
+      <button data-tab="final"><span class="icon">✨</span><span>成品</span></button>
+      <button data-tab="history"><span class="icon">📋</span><span>历史<span class="tab-badge hidden" id="history-badge"></span></span></button>
+    </nav>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js?v=1"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js?v=1').catch(e => console.error('SW fail', e));
+    }
+  </script>
+</body>
+</html>
