@@ -935,62 +935,75 @@ function renderMagazineHTML(md, overrideTitle) {
   const cp = (cleanMd.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const tags = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.trim()).filter(Boolean);
 
-  // 分章节
+  // 分章节（从 ### 01 开始，跳过信息卡部分）
   const sections = parseSections(md);
+  // 分离出"小说哪里看"资源链接（在第一个 ### 之前的文字）
+  const firstSectionIdx = md.search(/\n###\s+/);
+  const headerPart = firstSectionIdx > 0 ? md.slice(0, firstSectionIdx) : md;
 
-  const tagsHtml = tags.map(t =>
-    `<span style="display:inline-block;padding:4px 12px;background:#dcecf8;color:#2d72ad;border-radius:999px;font-size:12px;font-weight:500;margin:0 8px 6px 0;">${escapeHtml(t)}</span>`
-  ).join('');
+  // 信息卡字段
+  const infoLines = headerPart.split('\n').map(l => l.trim()).filter(Boolean);
 
+  // 小说链接
+  const novelLink = (md.match(/【小说在哪看】[^\n]+/)?.[0] || '').replace(/【小说在哪看】/, '').trim();
+  const collectionLink = (md.match(/【已推小说合集】[^\n]+/)?.[0] || '').replace(/【已推小说合集】/, '').trim();
 
-  // Section labels
-  const sectionLabels = ['小说哪里看', '文案推荐', 'Fanst 碎碎念', '名场面预警', '最戳我的一个细节', '综合评价',
+  // 标签
+  const tagsHtml = tags.length ? `<span style="display:inline-block;margin:0 8px 6px 0;">${tags.map(t => `<span style="display:inline-block;padding:4px 12px;background:#dcecf8;color:#2d72ad;border-radius:20px;font-size:12px;font-weight:500;margin-right:6px;">${escapeHtml(t)}</span>`).join('')}</span>` : '';
+
+  // 章节渲染
+  const sectionLabels = ['文案推荐', 'Fanst 碎碎念', '名场面预警', '最戳我的一个细节', '综合评价',
     '避雷点', '踩雷预警', '最戳我的一个槽点'];
   const labelNums = {
-    '小说哪里看': '00', '文案推荐': '01', 'Fanst 碎碎念': '02', '名场面预警': '03',
-    '最戳我的一个细节': '04', '综合评价': '05', '避雷点': '01', '踩雷预警': '03', '最戳我的一个槽点': '04',
+    '文案推荐': '01', 'Fanst 碎碎念': '02', '名场面预警': '03', '最戳我的一个细节': '04', '综合评价': '05',
+    '避雷点': '01', '踩雷预警': '03', '最戳我的一个槽点': '04',
   };
 
   let sectionHtml = '';
   sectionLabels.forEach(label => {
-    // 匹配时忽略编号前缀（AI 可能输出 "00 小说哪里看" 或 "小说哪里看"）
     const sec = sections.find(s => s.label === label || s.label.endsWith(' ' + label) || s.label.includes(label));
-    if (sec) {
-      sectionHtml += renderSectionForMagazine(labelNums[label] || '00', label, sec.body);
-    } else if (label === '小说哪里看') {
-      // AI 漏掉了 00 章节 → 自动补上固定内容
-      sectionHtml += renderSectionForMagazine('00', '小说哪里看',
-        '【小说在哪看】请看这篇：小说阅读途径 →\n\n【已推小说合集】请看这篇：已推小说合集 →');
-    }
+    if (sec) sectionHtml += renderSectionForMagazine(labelNums[label], label, sec.body);
   });
 
+  // 资源链接（小说哪里看）
+  const resourceHtml = (novelLink || collectionLink) ? `
+    <p style="margin-bottom:12px;line-height:1.8;">
+      ${novelLink ? `<span style="display:block;margin-bottom:6px;">📖 <strong>小说在哪看</strong>：${escapeHtml(novelLink)}</span>` : ''}
+      ${collectionLink ? `<span style="display:block;">📚 <strong>已推小说合集</strong>：${escapeHtml(collectionLink)}</span>` : ''}
+    </p>` : '';
+
   return `
-    <div style="max-width:100%;margin:0 auto;background:#fafcfd;">
-      <!-- CP 角色图占位 -->
-      <div style="width:100%;aspect-ratio:16/10;background:linear-gradient(135deg,#c8ddf5 0%,#a8cdf0 30%,#f5d8e2 60%,#fad2e0 100%);display:flex;align-items:center;justify-content:center;">
-        <p style="margin:0;font-size:14px;color:rgba(59,130,197,0.6);letter-spacing:0.04em;">📷 在此插入角色图</p>
-      </div>
-      <div style="height:3px;background:#3B82C5;opacity:0.7;font-size:0;line-height:0;">&nbsp;</div>
+    <div style="max-width:100%;margin:0 auto;background:#fafcfd;font-size:15px;line-height:1.85;color:#3a3a3a;">
+
+      <!-- 角色图占位 -->
+      <p style="margin:0;padding:60px 0;text-align:center;background:linear-gradient(135deg,#c8ddf5,#a8cdf0,#f5d8e2,#fad2e0);font-size:13px;color:rgba(59,130,197,0.5);">📷 在此插入角色图片</p>
+      <p style="margin:0;height:3px;background:#3B82C5;font-size:0;line-height:0;">&nbsp;</p>
 
       <!-- 信息卡 -->
-      <section style="background:#ffffff;padding:20px 16px 20px;">
-        ${author ? `<div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">作者</span><span style="font-weight:500;color:#1a1a1a;">${escapeHtml(author)}</span></div>` : ''}
-        ${rating ? `<div style="display:flex;align-items:baseline;gap:8px;margin-top:${author ? '8px' : '0'};"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">分级</span><span style="font-weight:500;color:#3B82C5;">${escapeHtml(rating)}</span></div>` : ''}
-        ${cp ? `<div style="display:flex;align-items:baseline;gap:8px;margin-top:${author || rating ? '8px' : '0'};"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">CP</span><span style="font-weight:500;color:#3B82C5;">${escapeHtml(cp)}</span></div>` : ''}
-        ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid #e0e0e0;">${tagsHtml}</div>` : ''}
-      </section>
+      <p style="margin:0;padding:0 16px;">
+        ${infoLines.filter(l => !/^[-*_]/.test(l) && !/【小说|【已推/.test(l) && !/基本信息卡/.test(l) && !/^\*\*/.test(l)).map(l => {
+          const m = l.match(/^- (.+?)[:：](.+)/);
+          if (m) return `<span style="margin-right:20px;font-size:14px;"><span style="color:#888;">${escapeHtml(m[1].trim())}</span> <span style="color:#1a1a1a;font-weight:500;">${escapeHtml(m[2].trim())}</span></span>`;
+          return '';
+        }).filter(Boolean).join('');
+        }
+      </p>
+      ${tagsHtml ? `<p style="margin:0;padding:10px 16px 0 16px;">${tagsHtml}</p>` : ''}
 
+      <!-- 资源链接 -->
+      <p style="margin:0;padding:16px 16px 8px 16px;font-size:14px;border-top:1px solid #e0e0e0;margin-top:14px;">${resourceHtml}</p>
+
+      <!-- 正文章节 -->
       ${sectionHtml}
 
       <!-- 收尾 -->
-      <section style="padding:28px 16px 32px;background:linear-gradient(180deg,#fdf2f5 0%,#eef5fb 100%);text-align:center;border-top:1px solid #e5dfe2;">
-        <p style="font-size:12px;line-height:2;color:#888;margin:0 0 20px;">所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。</p>
-        <div style="display:inline-block;padding:12px 28px;background:#ffffff;border:2px solid #E8739A;border-radius:8px;">
-          <p style="font-size:14px;font-weight:600;line-height:1.6;color:#E8739A;margin:0;">💬 非常需要你的推荐留言或观后感！</p>
-          <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？评论区等你</p>
-        </div>
-        <p style="margin:18px 0 0;font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
-      </section>
+      <p style="margin:0;padding:24px 16px 24px 16px;text-align:center;background:linear-gradient(180deg,#fdf2f5,#eef5fb);font-size:12px;color:#888;line-height:2;">
+        所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。
+      </p>
+      <p style="margin:0;padding:0 16px 20px 16px;text-align:center;background:#eef5fb;">
+        <span style="display:inline-block;padding:10px 24px;background:#fff;border:2px solid #E8739A;border-radius:6px;font-size:14px;color:#E8739A;">💬 非常需要你的推荐留言或观后感！</span>
+      </p>
+      <p style="margin:0;padding:12px 16px 12px 16px;text-align:center;font-size:11px;color:#b8c8d5;">磕学家 · 哈利波特板块</p>
     </div>`;
 }
 
@@ -1012,13 +1025,11 @@ function parseSections(md) {
 function renderSectionForMagazine(num, label, body) {
   const bodyHtml = renderWeChatBody(body);
   return `
-    <section style="padding:32px 16px;border-top:1px solid #e5dfe2;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:40px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
-        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:20px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
-      </div>
-      <div style="font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</div>
-    </section>`;
+    <p style="margin:0;padding:0 16px 8px 16px;border-top:1px solid #efe8db;padding-top:20px;">
+      <span style="font-size:36px;font-weight:700;line-height:1;color:#3B82C5;margin-right:10px;">${num}</span>
+      <span style="font-size:18px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
+    </p>
+    <p style="margin:0;padding:0 16px 0 16px;font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</p>`;
 }
 
 function renderWeChatBody(body) {
@@ -1029,7 +1040,7 @@ function renderWeChatBody(body) {
   let inList = false;
 
   const flushQuote = () => {
-    if (inQuote) { html += '</div>'; inQuote = false; }
+    if (inQuote) { html += '</span>'; inQuote = false; }
   };
   const flushList = () => {
     if (inList) { html += '</ul>'; inList = false; }
@@ -1042,7 +1053,7 @@ function renderWeChatBody(body) {
     // 分隔线
     if (/^[-*_]{3,}$/.test(l) || l === '· · ·') {
       flushQuote(); flushList();
-      html += '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0;color:#e5dfe2;font-size:10px;letter-spacing:0.12em;"><span style="flex:1;height:1px;background:#e5dfe2;max-width:60px;"></span>· · ·<span style="flex:1;height:1px;background:#e5dfe2;max-width:60px;"></span></div>';
+      html += '<span style="display:block;text-align:center;margin:12px 0;color:#d5cec4;font-size:11px;">· · ·</span>';
       continue;
     }
 
@@ -1050,13 +1061,13 @@ function renderWeChatBody(body) {
     if (l.startsWith('> ')) {
       flushList();
       if (!inQuote) {
-        html += '<div style="margin:20px 0;padding:20px 22px;background:#fdf2f5;border-left:3px solid #E8739A;border-radius:0 4px 4px 0;">';
+        html += '<span style="display:block;margin:14px 0;padding:14px 16px;background:#fdf2f5;border-left:3px solid #E8739A;">';
         inQuote = true;
       }
-      html += `<p style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:8px;">${inlineMdWeChat(l.slice(2))}</p>`;
+      html += `<span style="display:block;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:6px;">${inlineMdWeChat(l.slice(2))}</span>`;
       continue;
     } else {
-      flushQuote();
+      if (inQuote) { html += '</span>'; inQuote = false; }
     }
 
     // 标题
@@ -1076,7 +1087,7 @@ function renderWeChatBody(body) {
     }
 
     flushQuote(); flushList();
-    html += `<p style="margin-bottom:14px;">${inlineMdWeChat(l)}</p>`;
+    html += `<span style="display:block;margin-bottom:12px;">${inlineMdWeChat(l)}</span>`;
   }
 
   flushQuote();
