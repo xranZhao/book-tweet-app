@@ -25,6 +25,8 @@ const EMPTY_SESSION = () => ({
   previewMode: false,   // 编辑/预览切换
 });
 let session = EMPTY_SESSION();
+window.S = session; // 调试用
+window.showFinal = showFinal; // 调试用
 
 function saveSession() {
   if (!session.book) return;
