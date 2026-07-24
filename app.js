@@ -932,8 +932,8 @@ function renderMagazineHTML(md, overrideTitle) {
   const cleanMd = md.replace(/\*\*(.+?)\*\*/g, '$1');
   const author = (cleanMd.match(/作者\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const rating = (cleanMd.match(/分级\s*[:：]\s*(.+)/)?.[1] || '').trim();
-  const cp = (cleanMd.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').trim();
-  const tags = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.trim()).filter(Boolean);
+  const cp = (cleanMd.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').replace(/<\/?[^>]+>/g, '').trim();
+  const tags = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.replace(/<\/?[^>]+>/g, '').trim()).filter(Boolean);
   const workTitle = (cleanMd.match(/原作\s*[:：]\s*(.+)/)?.[1] || '').replace(/[《》]/g, '').trim();
 
   // 小说链接
