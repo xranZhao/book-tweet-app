@@ -1056,7 +1056,7 @@ function renderWeChatBody(body) {
       continue;
     }
 
-    // 引用块（以 > 开头）
+    // 引用块
     if (l.startsWith('> ')) {
       flushList();
       if (!inQuote) {
