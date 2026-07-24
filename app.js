@@ -696,7 +696,6 @@ ${STYLE_GUIDE_SEED}
 - 每章 1-3 段短段落，不要复述大量剧情，只保留最能支撑标题角度的 1-2 个细节/名场面
 - 标题党但真诚，不要夸张到失实
 - 文案口语化，真诚推荐
-- 结尾固定放「所有荣誉与利益属于作者和创作者。」和「💬 非常需要你的推荐留言或观后感！」
 - 不要在文中出现文件编码或乱码`;
 
   try {
@@ -984,10 +983,10 @@ function renderMagazineHTML(md, overrideTitle) {
 
       <!-- 收尾 -->
       <section style="padding:28px 16px 32px;background:linear-gradient(180deg,#fdf2f5 0%,#eef5fb 100%);text-align:center;border-top:1px solid #e5dfe2;">
-        <p style="font-size:12px;line-height:2;color:#888;margin:0 0 20px;">所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待，欢迎尝试。</p>
+        <p style="font-size:12px;line-height:2;color:#888;margin:0 0 20px;">所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。</p>
         <div style="display:inline-block;padding:12px 28px;background:#ffffff;border:2px solid #E8739A;border-radius:8px;">
           <p style="font-size:14px;font-weight:600;line-height:1.6;color:#E8739A;margin:0;">💬 非常需要你的推荐留言或观后感！</p>
-          <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？在评论区告诉我们～</p>
+          <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？评论区等你</p>
         </div>
         <p style="margin:18px 0 0;font-family:'Noto Serif SC','Songti SC','SimSun',serif;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
       </section>
