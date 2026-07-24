@@ -1060,7 +1060,7 @@ function renderWeChatBody(body) {
     if (l.startsWith('> ')) {
       flushList();
       if (!inQuote) {
-        html += '<span style="display:block;margin:14px 0;padding:14px 16px;background:#fdf2f5;border-left:3px solid #E8739A;">';
+        html += '<span style="display:block;margin:14px 0;padding:14px 16px;background:#fdf2f5;border-left:1px solid #E8739A;">';
         inQuote = true;
       }
       html += `<span style="display:block;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:6px;">${inlineMdWeChat(l.slice(2))}</span>`;
