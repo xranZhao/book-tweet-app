@@ -1047,7 +1047,7 @@ function renderWeChatBody(body) {
   let inList = false;
 
   const flushQuote = () => {
-    if (inQuote) { html += '</div>'; inQuote = false; }
+    if (inQuote) { html += '</td></tr></table>'; inQuote = false; }
   };
   const flushList = () => {
     if (inList) { html += '</ul>'; inList = false; }
