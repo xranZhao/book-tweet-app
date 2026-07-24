@@ -988,7 +988,7 @@ function renderMagazineHTML(md, overrideTitle) {
           <p style="font-size:14px;font-weight:600;line-height:1.6;color:#E8739A;margin:0;">💬 非常需要你的推荐留言或观后感！</p>
           <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？评论区等你</p>
         </div>
-        <p style="margin:18px 0 0;font-family:'Noto Serif SC','Songti SC','SimSun',serif;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
+        <p style="margin:18px 0 0;font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
       </section>
     </div>`;
 }
@@ -1013,8 +1013,8 @@ function renderSectionForMagazine(num, label, body) {
   return `
     <section style="padding:32px 16px;border-top:1px solid #e5dfe2;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-        <span style="font-family:'Noto Serif SC','Songti SC','SimSun',serif;font-size:40px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
-        <span style="font-family:'Noto Serif SC','Songti SC','SimSun',serif;font-size:20px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
+        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:40px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
+        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:20px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
       </div>
       <div style="font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</div>
     </section>`;
@@ -1052,7 +1052,7 @@ function renderWeChatBody(body) {
         html += '<div style="margin:20px 0;padding:20px 22px;background:#fdf2f5;border-left:3px solid #E8739A;border-radius:0 4px 4px 0;">';
         inQuote = true;
       }
-      html += `<p style="font-family:'Noto Serif SC','Songti SC','SimSun',serif;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:8px;">${inlineMdWeChat(l.slice(2))}</p>`;
+      html += `<p style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:8px;">${inlineMdWeChat(l.slice(2))}</p>`;
       continue;
     } else {
       flushQuote();
