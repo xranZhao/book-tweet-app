@@ -100,7 +100,7 @@ function renderMarkdown(md) {
     if (!l) { if (inList) { html += '</ul>'; inList = false; } return; }
     if (/^[-*_]{3,}$/.test(l)) {
       if (inList) { html += '</ul>'; inList = false; }
-      html += '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">';
+      html += '<hr style="border:none;margin:8px 0;">';
       return;
     }
     const h = l.match(/^(#{1,3})\s+(.+)/);
