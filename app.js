@@ -429,17 +429,27 @@ function truncateText(text, maxChars = 200000) {
 async function runReading() {
   if (!CONFIG.API_KEY) { alert('请先设置 DeepSeek API Key'); openSettings(); return; }
   const b = session.book;
+  const startTime = Date.now();
   $('#main').innerHTML = `
     <div class="screen">
       <div class="book-info-bar">
         <span style="font-size:24px;flex-shrink:0;">🔍</span>
         <span class="b-title">AI 正在阅读《${escapeHtml(b.title)}》...</span>
       </div>
-      <div class="loading">
-        <div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        <p>Flash 模型省钱快速，大概 30-90 秒</p>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+      </div>
+      <div class="loading" style="padding:20px 16px;">
+        <p id="elapsed-text">⏱ 已等待 0 秒</p>
+        <p style="font-size:12px;color:var(--text-lighter);">Flash 模型 · 约 30-90 秒</p>
       </div>
     </div>`;
+
+  // 计时器
+  const timerInterval = setInterval(() => {
+    const el = $('#elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
 
   const text = truncateText(b.text, 200000);
   const prompt = `请阅读以下小说全文，输出一份结构化的阅读报告。要求：
@@ -455,7 +465,9 @@ ${text}`;
 
   try {
     const res = await deepSeekChat(CONFIG.READ_MODEL, prompt, 4000);
+    clearInterval(timerInterval);
     session.readReport = res;
+    session.readReportTime = ((Date.now() - startTime) / 1000).toFixed(0);
     session.step = 1;
     // 提取判定
     if (res.includes('强推')) session.verdict = '强推';
@@ -490,6 +502,7 @@ function showReadingReport() {
         <div class="card-title">${escapeHtml(b.title)}</div>
         <div class="card-meta" style="color:${verdictColor};font-weight:700;">判定：${v}</div>
       </div>
+      ${session.readReportTime ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;">✅ AI 阅读完成 · 耗时 ${session.readReportTime} 秒</div>` : ''}
       <div class="report-card">${renderMarkdown(session.readReport)}</div>
       ${v === '不推不写' ? `
         <button class="btn btn-ghost btn-block" id="btn-pass">标记"已过"</button>
@@ -522,16 +535,26 @@ function stepIndicator(currentIdx) {
 /* ─── Title generation ─── */
 async function generateTitleOptions() {
   if (!session.readReport) return;
+  const startTime = Date.now();
   $('#main').innerHTML = `
     <div class="screen">
       <div class="book-info-bar">
         <span style="font-size:24px;flex-shrink:0;">✏️</span>
         <span class="b-title">正在生成标题候选...</span>
       </div>
-      <div class="loading">
-        <div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+      </div>
+      <div class="loading" style="padding:20px 16px;">
+        <p id="elapsed-text">⏱ 已等待 0 秒</p>
+        <p style="font-size:12px;color:var(--text-lighter);">Pro 模型 · 生成 5 个标题 · 约 20-40 秒</p>
       </div>
     </div>`;
+
+  const timerInterval = setInterval(() => {
+    const el = $('#elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
 
   const prompt = `根据以下阅读报告，为这篇小说的公众号推文生成 5 个标题候选。
 
@@ -549,12 +572,16 @@ ${session.readReport}`;
 
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 2000, 120000);
+    clearInterval(timerInterval);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
     session.titleOptions = parseNumberedList(res);
     if (!session.titleOptions.length) {
       session.titleOptions = [res.trim().split('\n').filter(Boolean).slice(0, 5).join('\n') || res.trim()];
     }
+    session.titleGenTime = elapsed;
     saveSession();
     showTitleSelector();
+    toast(`标题已生成 · 耗时 ${elapsed} 秒`);
   } catch (e) {
     $('#main').innerHTML = `
       <div class="screen">
@@ -603,17 +630,26 @@ function showTitleSelector() {
 /* ─── Draft generation ─── */
 async function generateDraft() {
   const b = session.book;
+  const startTime = Date.now();
   $('#main').innerHTML = `
     <div class="screen">
       <div class="book-info-bar">
         <span style="font-size:24px;flex-shrink:0;">📝</span>
         <span class="b-title">Pro 模型正在写初稿...</span>
       </div>
-      <div class="loading">
-        <div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        <p>网络波动会自动重试 3 次，请稍候</p>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+      </div>
+      <div class="loading" style="padding:20px 16px;">
+        <p id="elapsed-text">⏱ 已等待 0 秒</p>
+        <p style="font-size:12px;color:var(--text-lighter);">Pro 模型 · 生成推文初稿 · 约 60-180 秒</p>
       </div>
     </div>`;
+
+  const timerInterval = setInterval(() => {
+    const el = $('#elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
 
   const isAvoid = session.verdict === '避雷可写';
   const title = session.selectedTitle || b.title;
@@ -665,6 +701,8 @@ ${STYLE_GUIDE_SEED}
 
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
+    clearInterval(timerInterval);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
     // 去掉 AI 可能加的大标题
     let md = res.replace(/^#\s*.+\n+/m, '');
     // 强制 ### 格式
@@ -674,7 +712,9 @@ ${STYLE_GUIDE_SEED}
     session.step = 2;
     saveSession();
     showRevise();
+    toast(`初稿已生成 · 耗时 ${elapsed} 秒`);
   } catch (e) {
+    clearInterval(timerInterval);
     $('#main').innerHTML = `
       <div class="screen">
         <div class="loading">初稿生成失败：${escapeHtml(e.message)}</div>
@@ -745,7 +785,27 @@ async function aiRevise() {
   const instruction = $('#revise-input').value.trim();
   if (!instruction) { toast('请先写修改意见'); return; }
   const current = $('#md-editor') ? $('#md-editor').value : session.finalMd;
+  const startTime = Date.now();
   $('#btn-ai-revise').textContent = '修改中...';
+  $('#btn-ai-revise').disabled = true;
+
+  // 在输入框下方插入进度条
+  const reviseArea = $('#revise-input').parentNode;
+  const progEl = document.createElement('div');
+  progEl.id = 'revise-progress';
+  progEl.innerHTML = `
+    <div class="progress-bar-wrapper" style="padding:8px 0;">
+      <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+    </div>
+    <p id="revise-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
+  `;
+  reviseArea.appendChild(progEl);
+
+  const timerInterval = setInterval(() => {
+    const el = $('#revise-elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
+
   const prompt = `请根据以下要求修改推文初稿。只返回修改后的完整 Markdown，不要解释。
 
 要求：${instruction}
@@ -754,6 +814,11 @@ async function aiRevise() {
 ${current}`;
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
+    clearInterval(timerInterval);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+    // 移除进度条
+    const progEl = $('#revise-progress');
+    if (progEl) progEl.remove();
     let revised = res.replace(/^#\s*.+\n+/m, '');
     session.finalMd = revised;
     session.draftMd = revised;
@@ -764,9 +829,14 @@ ${current}`;
       $('#md-editor').value = revised;
     }
     $('#btn-ai-revise').textContent = '让 AI 按上面意见改';
-    toast('已修改');
+    $('#btn-ai-revise').disabled = false;
+    toast(`已修改 · 耗时 ${elapsed} 秒`);
   } catch (e) {
+    clearInterval(timerInterval);
+    const progEl = $('#revise-progress');
+    if (progEl) progEl.remove();
     $('#btn-ai-revise').textContent = '让 AI 按上面意见改';
+    $('#btn-ai-revise').disabled = false;
     alert('修改失败：' + e.message);
   }
 }

@@ -130,6 +130,22 @@ input:focus, textarea:focus { border-color: var(--accent); }
   40% { transform: translateY(-8px); opacity: 1; }
 }
 
+/* ─── Progress bar (indeterminate slider) ─── */
+.progress-bar-wrapper { padding: 8px 16px; }
+.progress-bar {
+  height: 4px; background: var(--border); border-radius: 2px;
+  overflow: hidden; position: relative;
+}
+.progress-bar-slider {
+  width: 35%; height: 100%; background: var(--accent);
+  border-radius: 2px;
+  animation: slider 1.6s ease-in-out infinite;
+}
+@keyframes slider {
+  0% { transform: translateX(-35%); }
+  100% { transform: translateX(285%); }
+}
+
 /* ─── Toast ─── */
 .toast {
   position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
