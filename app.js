@@ -964,45 +964,33 @@ function renderMagazineHTML(md, overrideTitle) {
     }
   });
 
-  // 信息卡字段（table 布局方案，微信兼容）
-  const infoRows = [];
-  if (author) infoRows.push(`<tr><td style="font-size:12px;color:#888;letter-spacing:0.06em;padding:0 12px 8px 0;vertical-align:top;white-space:nowrap;">作者</td><td style="font-size:14px;font-weight:500;color:#1a1a1a;padding:0 0 8px 0;vertical-align:top;">${escapeHtml(author)}</td></tr>`);
-  if (rating) infoRows.push(`<tr><td style="font-size:12px;color:#888;letter-spacing:0.06em;padding:0 12px 8px 0;vertical-align:top;white-space:nowrap;">分级</td><td style="font-size:14px;font-weight:500;color:#3B82C5;padding:0 0 8px 0;vertical-align:top;">${escapeHtml(rating)}</td></tr>`);
-  if (cp) infoRows.push(`<tr><td style="font-size:12px;color:#888;letter-spacing:0.06em;padding:0 12px 0 0;vertical-align:top;white-space:nowrap;">CP</td><td style="font-size:14px;font-weight:500;color:#3B82C5;padding:0;vertical-align:top;">${escapeHtml(cp)}</td></tr>`);
-  const infoTable = infoRows.length ? `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">${infoRows.join('')}</table>` : '';
-
-  // 标签行（inline-block 方案，微信兼容）
-  const tagsHtmlInline = tags.length ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0e0e0;line-height:2;">${tags.map(t => `<span style="display:inline-block;padding:4px 12px;background:#dcecf8;color:#2d72ad;border-radius:20px;font-size:12px;font-weight:500;margin:0 8px 6px 0;">${escapeHtml(t)}</span>`).join('')}</div>` : '';
-
   return `
     <div style="max-width:100%;margin:0 auto;background:#fafcfd;">
       <!-- CP 角色图占位 -->
-      <div style="width:100%;height:180px;font-size:0;line-height:0;background:linear-gradient(135deg,#c8ddf5 0%,#a8cdf0 30%,#f5d8e2 60%,#fad2e0 100%);text-align:center;">
-        <p style="margin:0;padding-top:80px;font-size:14px;color:rgba(59,130,197,0.6);letter-spacing:0.04em;">&nbsp;📷 在此插入角色图&nbsp;</p>
+      <div style="width:100%;aspect-ratio:16/10;background:linear-gradient(135deg,#c8ddf5 0%,#a8cdf0 30%,#f5d8e2 60%,#fad2e0 100%);display:flex;align-items:center;justify-content:center;">
+        <p style="margin:0;font-size:14px;color:rgba(59,130,197,0.6);letter-spacing:0.04em;">📷 在此插入角色图</p>
       </div>
       <div style="height:3px;background:#3B82C5;opacity:0.7;font-size:0;line-height:0;">&nbsp;</div>
 
       <!-- 信息卡 -->
-      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ffffff;width:100%;border-collapse:collapse;">
-        <tr><td style="padding:20px 16px 20px 16px;">
-          ${infoTable}
-          ${tagsHtmlInline}
-        </td></tr>
-      </table>
+      <section style="background:#ffffff;padding:20px 16px 20px;">
+        ${author ? `<div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">作者</span><span style="font-weight:500;color:#1a1a1a;">${escapeHtml(author)}</span></div>` : ''}
+        ${rating ? `<div style="display:flex;align-items:baseline;gap:8px;margin-top:${author ? '8px' : '0'};"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">分级</span><span style="font-weight:500;color:#3B82C5;">${escapeHtml(rating)}</span></div>` : ''}
+        ${cp ? `<div style="display:flex;align-items:baseline;gap:8px;margin-top:${author || rating ? '8px' : '0'};"><span style="font-size:12px;color:#888;letter-spacing:0.06em;min-width:56px;">CP</span><span style="font-weight:500;color:#3B82C5;">${escapeHtml(cp)}</span></div>` : ''}
+        ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid #e0e0e0;">${tagsHtml}</div>` : ''}
+      </section>
 
       ${sectionHtml}
 
       <!-- 收尾 -->
-      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(180deg,#fdf2f5 0%,#eef5fb 100%);width:100%;border-collapse:collapse;border-top:1px solid #e5dfe2;">
-        <tr><td style="padding:28px 16px 32px 16px;text-align:center;">
-          <p style="font-size:12px;line-height:2;color:#888;margin:0 0 20px;">所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。</p>
-          <table cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:12px 28px;background:#ffffff;border:2px solid #E8739A;border-radius:8px;text-align:center;">
-            <p style="font-size:14px;font-weight:600;line-height:1.6;color:#E8739A;margin:0;">💬 非常需要你的推荐留言或观后感！</p>
-            <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？评论区等你</p>
-          </td></tr></table>
-          <p style="margin:18px 0 0;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
-        </td></tr>
-      </table>
+      <section style="padding:28px 16px 32px;background:linear-gradient(180deg,#fdf2f5 0%,#eef5fb 100%);text-align:center;border-top:1px solid #e5dfe2;">
+        <p style="font-size:12px;line-height:2;color:#888;margin:0 0 20px;">所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。</p>
+        <div style="display:inline-block;padding:12px 28px;background:#ffffff;border:2px solid #E8739A;border-radius:8px;">
+          <p style="font-size:14px;font-weight:600;line-height:1.6;color:#E8739A;margin:0;">💬 非常需要你的推荐留言或观后感！</p>
+          <p style="font-size:12px;color:#888;margin:4px 0 0;">读完这篇文你有什么感受？评论区等你</p>
+        </div>
+        <p style="margin:18px 0 0;font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:12px;color:#b8c8d5;letter-spacing:0.08em;">磕学家 · 哈利波特板块</p>
+      </section>
     </div>`;
 }
 
@@ -1024,19 +1012,13 @@ function parseSections(md) {
 function renderSectionForMagazine(num, label, body) {
   const bodyHtml = renderWeChatBody(body);
   return `
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;border-top:1px solid #f0ece6;">
-      <tr>
-        <td style="padding:24px 16px 24px 16px;vertical-align:top;">
-          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-            <tr>
-              <td style="font-size:36px;font-weight:700;line-height:1;color:#3B82C5;padding:0 12px 0 0;vertical-align:middle;">${num}</td>
-              <td style="font-size:20px;font-weight:700;color:#1a1a1a;vertical-align:middle;">${escapeHtml(label)}</td>
-            </tr>
-          </table>
-          <div style="font-size:15px;line-height:1.85;color:#3a3a3a;margin-top:16px;">${bodyHtml}</div>
-        </td>
-      </tr>
-    </table>`;
+    <section style="padding:32px 16px;border-top:1px solid #e5dfe2;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:40px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
+        <span style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:20px;font-weight:700;color:#1a1a1a;">${escapeHtml(label)}</span>
+      </div>
+      <div style="font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</div>
+    </section>`;
 }
 
 function renderWeChatBody(body) {
@@ -1060,7 +1042,7 @@ function renderWeChatBody(body) {
     // 分隔线
     if (/^[-*_]{3,}$/.test(l) || l === '· · ·') {
       flushQuote(); flushList();
-      html += '<p style="text-align:center;margin:16px 0;color:#e5dfe2;font-size:10px;letter-spacing:0.12em;">· · ·</p>';
+      html += '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0;color:#e5dfe2;font-size:10px;letter-spacing:0.12em;"><span style="flex:1;height:1px;background:#e5dfe2;max-width:60px;"></span>· · ·<span style="flex:1;height:1px;background:#e5dfe2;max-width:60px;"></span></div>';
       continue;
     }
 
@@ -1068,13 +1050,13 @@ function renderWeChatBody(body) {
     if (l.startsWith('> ')) {
       flushList();
       if (!inQuote) {
-        html += '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;margin:16px 0;"><tr><td style="padding:16px 18px;background:#fdf2f5;border-left:3px solid #E8739A;">';
+        html += '<div style="margin:20px 0;padding:20px 22px;background:#fdf2f5;border-left:3px solid #E8739A;border-radius:0 4px 4px 0;">';
         inQuote = true;
       }
-      html += `<p style="font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:8px;">${inlineMdWeChat(l.slice(2))}</p>`;
+      html += `<p style="font-family:'Noto Serif SC', 'Songti SC', 'SimSun', sans-serif;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:8px;">${inlineMdWeChat(l.slice(2))}</p>`;
       continue;
     } else {
-      if (inQuote) { html += '</td></tr></table>'; inQuote = false; }
+      flushQuote();
     }
 
     // 标题
