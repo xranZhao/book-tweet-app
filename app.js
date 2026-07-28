@@ -1065,7 +1065,7 @@ const OLIVE = (() => {
 </section>`;
   }
 
-  return { globalOpen, globalClose, hiddenMark, heroCard, editorNote, sectionTitle, paragraph, keyPointCard, endingActions };
+  return { LEAF, globalOpen, globalClose, hiddenMark, heroCard, editorNote, sectionTitle, paragraph, keyPointCard, endingActions };
 })();
 
 /* ─── 橄榄手记风格 HTML 渲染 ─── */
@@ -1131,7 +1131,7 @@ function renderMagazineHTML(md, overrideTitle) {
     OLIVE.editorNote('基本信息', metaStr) +
     sectionHtml +
     OLIVE.endingActions() +
-    '<section style="margin-top:8px;text-align:center;"><p style="margin:0;font-size:11px;line-height:1.8;color:#9ea096;font-family:\'IBM Plex Sans\',sans-serif;">' + LEAF('所有荣誉与利益属于作者和创作者。即使不了解角色，该书仍可当成独立小说看待。') + '</p></section>' +
+    '<section style="margin-top:8px;text-align:center;"><p style="margin:0;font-size:11px;line-height:1.8;color:#9ea096;font-family:\'IBM Plex Sans\',sans-serif;">' + OLIVE.LEAF('所有荣誉与利益属于作者和创作者。即使不了解角色，该书仍可当成独立小说看待。') + '</p></section>' +
     OLIVE.globalClose() +
     OLIVE.hiddenMark()
   );
