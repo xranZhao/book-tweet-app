@@ -924,89 +924,221 @@ function legacyCopy(el, done) {
   document.execCommand('copy'); sel.removeAllRanges(); done();
 }
 
-/* ─── 微信杂志风 HTML 渲染（table布局，微信兼容）─── */
+/* ═══════════════════════════════════════════════════════════════════════
+ * 橄榄手记组件库（嵌入式 JS 模板）
+ * 来源：gzh-design references/theme-olive-journal.md
+ * ═══════════════════════════════════════════════════════════════════════ */
+const OLIVE = (() => {
+  const FONT = "'IBM Plex Sans',-apple-system,system-ui,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif";
+  const LEAF = (s) => `<span leaf="">${s}</span>`;
+
+  // 全局容器开
+  function globalOpen() {
+    return `<section style="max-width:677px;margin:0 auto;padding:8px;box-sizing:border-box;background:#fdfdf8;color:#4d4f46;font-family:${FONT};line-height:1.75;">`;
+  }
+  // 全局容器闭
+  function globalClose() { return '</section>'; }
+  // 隐藏标记
+  function hiddenMark() { return '<p style="display:none;"><mp-style-type data-value="3"></mp-style-type></p>'; }
+
+  // 头图卡（组件2，无旧标题行，无插画）
+  function heroCard(label, mainTitle, strongWord, subtitle, summary, tagsArr) {
+    const tagsHtml = (tagsArr || []).slice(0, 2).map(t =>
+      `<span style="background:#e5e7e0;color:#23251d;padding:3px 8px;border-radius:4px;font-size:8px;font-weight:700;border:1px solid #bfc1b7;">${LEAF(escapeHtml(t))}</span>`
+    ).join('');
+    return `
+<section style="background:#fdfdf8;border:1px solid #bfc1b7;border-radius:6px;overflow:hidden;font-family:${FONT};">
+  <section style="padding:28px 24px 22px;">
+    <section style="display:flex;align-items:center;gap:8px;margin-bottom:22px;">
+      <span style="width:8px;height:8px;background:#1e1f23;border-radius:50%;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;">${LEAF('&nbsp;')}</span>
+      <span style="font-size:10px;font-weight:700;letter-spacing:3px;color:#65675e;">${LEAF(escapeHtml(label))}</span>
+      <span style="flex:1;height:1px;background:#bfc1b7;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;">${LEAF('&nbsp;')}</span>
+      <span style="font-size:10px;color:#9ea096;font-weight:500;font-variant-numeric:tabular-nums;">${LEAF('2026.07')}</span>
+    </section>
+    <section>
+      <p style="font-size:24px;font-weight:800;color:#23251d;margin:0 0 10px;line-height:1.15;letter-spacing:-0.75px;">
+        ${LEAF(escapeHtml(mainTitle))}<span style="color:#4d4f46;">${LEAF('&nbsp;·&nbsp;')}</span><span style="border-bottom:3px solid #e5e7e0;">${LEAF(escapeHtml(strongWord))}</span>
+      </p>
+      <section style="display:flex;align-items:center;gap:4px;margin-bottom:12px;">
+        <span style="width:22px;height:3px;background:#1e1f23;border-radius:2px;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;">${LEAF('&nbsp;')}</span>
+        <span style="width:8px;height:3px;background:#bfc1b7;border-radius:2px;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;">${LEAF('&nbsp;')}</span>
+      </section>
+      <p style="font-size:13px;color:#65675e;margin:0;line-height:1.7;">${LEAF(escapeHtml(subtitle))}</p>
+    </section>
+  </section>
+  <section style="background:#1e1f23;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+    <p style="font-size:12px;color:rgba(255,255,255,0.92);margin:0;font-weight:600;">${LEAF(escapeHtml(summary))}</p>
+    ${tagsHtml ? `<section style="display:flex;gap:6px;flex-wrap:wrap;">${tagsHtml}</section>` : ''}
+  </section>
+</section>`;
+  }
+
+  // 编者按（组件14）
+  function editorNote(label, noteItems) {
+    return `
+<section style="margin-top:24px;">
+  <section style="background:#fdfdf8;border:1px solid #bfc1b7;border-radius:6px;overflow:hidden;font-family:${FONT};">
+    <section style="padding:10px 16px;background:#1e1f23;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <p style="margin:0;font-size:10px;font-weight:800;letter-spacing:2px;color:#ffffff;">${LEAF(escapeHtml(label))}</p>
+      <span style="font-size:10px;color:rgba(255,255,255,0.65);">${LEAF('INFO')}</span>
+    </section>
+    <section style="padding:16px 18px 18px;background:#eeefe9;">
+      <p style="margin:0;font-size:14px;line-height:1.9;color:#4d4f46;text-align:justify;">${LEAF(escapeHtml(noteItems))}</p>
+    </section>
+  </section>
+</section>`;
+  }
+
+  // 章节标题（组件3，保留编号）
+  function sectionTitle(num, cnTitle, enTag) {
+    return `
+<section style="margin-top:24px;">
+  <section style="font-family:${FONT};">
+    <section style="display:flex;align-items:center;gap:14px;">
+      <section style="text-align:center;flex-shrink:0;">
+        <p style="margin:0;font-size:24px;font-weight:800;color:#23251d;line-height:1;letter-spacing:-2px;">${LEAF(num)}</p>
+        <p style="margin:0;font-size:8px;font-weight:700;color:#9ea096;letter-spacing:2px;">${LEAF(num === '///' ? 'END' : 'PART')}</p>
+      </section>
+      <span style="width:1px;height:36px;background:#bfc1b7;flex-shrink:0;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;">${LEAF('&nbsp;')}</span>
+      <section>
+        <p style="margin:0 0 1px;font-size:17px;font-weight:800;color:#23251d;letter-spacing:0.2px;">${LEAF(escapeHtml(cnTitle))}</p>
+        <p style="margin:0;font-size:11px;font-weight:600;color:#65675e;letter-spacing:1.2px;">${LEAF(escapeHtml(enTag))}</p>
+      </section>
+    </section>
+  </section>
+</section>`;
+  }
+
+  // 正文段落（组件10）
+  function paragraph(text) {
+    return `
+<section style="margin-top:24px;">
+  <section style="font-family:${FONT};">
+    <p style="margin:0;font-size:14px;line-height:1.9;text-align:justify;color:#4d4f46;">${text}</p>
+  </section>
+</section>`;
+  }
+
+  // 重点观点卡（组件15，无橙色下划线）
+  function keyPointCard(pointText, noteText) {
+    const notePart = noteText ? `&nbsp;${LEAF(escapeHtml(noteText))}` : '';
+    return `
+<section style="margin-top:24px;">
+  <section style="font-family:${FONT};">
+    <section style="background:#fdfdf8;border-radius:6px;padding:16px 18px;border:1px solid #bfc1b7;">
+      <p style="font-size:14px;color:#4d4f46;margin:0;line-height:1.8;text-align:justify;">
+        <strong style="color:#23251d;">${LEAF(escapeHtml(pointText))}</strong>${notePart}
+      </p>
+    </section>
+  </section>
+</section>`;
+  }
+
+  // 结尾行动区（组件28）
+  function endingActions() {
+    return `
+<section style="margin-top:24px;">
+  <section style="background:#fdfdf8;border:1px solid #bfc1b7;border-radius:6px;padding:22px 16px;text-align:center;font-family:${FONT};">
+    <p style="font-size:13px;font-weight:700;color:#23251d;line-height:1.6;margin:0 0 14px;">${LEAF('如果你觉得今天这篇有收获，欢迎点赞、在看、转发三连，我们下篇见。')}</p>
+    <section style="display:flex;justify-content:center;gap:18px;margin-bottom:14px;flex-wrap:wrap;">
+      <section style="text-align:center;color:#4d4f46;">
+        <section style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;background:#eeefe9;border-radius:6px;border:1px solid #bfc1b7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+        </section>
+        <span style="font-size:11px;font-weight:600;">${LEAF('赞')}</span>
+      </section>
+      <section style="text-align:center;color:#4d4f46;">
+        <section style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;background:#eeefe9;border-radius:6px;border:1px solid #bfc1b7;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path></svg>
+        </section>
+        <span style="font-size:11px;font-weight:600;">${LEAF('在看')}</span>
+      </section>
+      <section style="text-align:center;color:#23251d;">
+        <section style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;background:#d4c9b8;border-radius:6px;border:1px solid #b17816;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#23251d" stroke-width="1.8" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        </section>
+        <span style="font-size:11px;font-weight:700;">${LEAF('收藏')}</span>
+      </section>
+    </section>
+    <p style="line-height:1.6;font-size:10px;color:#9ea096;letter-spacing:2px;margin:0;font-weight:500;">${LEAF('THANKS FOR READING')}</p>
+  </section>
+</section>`;
+  }
+
+  return { globalOpen, globalClose, hiddenMark, heroCard, editorNote, sectionTitle, paragraph, keyPointCard, endingActions };
+})();
+
+/* ─── 橄榄手记风格 HTML 渲染 ─── */
 function renderMagazineHTML(md, overrideTitle) {
   const title = overrideTitle || '推文标题';
-
-  // 预处理：去掉 markdown 粗体标记
   const cleanMd = md.replace(/\*\*(.+?)\*\*/g, '$1');
+
+  // 元数据提取
   const author = (cleanMd.match(/作者\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const rating = (cleanMd.match(/分级\s*[:：]\s*(.+)/)?.[1] || '').trim();
   const cp = (cleanMd.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').replace(/<\/?[^>]+>/g, '').trim();
-  const tags = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.replace(/<\/?[^>]+>/g, '').trim()).filter(Boolean);
+  const tagsRaw = (cleanMd.match(/标签\s*[:：]\s*(.+)/)?.[1] || '').split(/[,，\/]/).map(s => s.replace(/<\/?[^>]+>/g, '').trim()).filter(Boolean);
   const workTitle = (cleanMd.match(/原作\s*[:：]\s*(.+)/)?.[1] || '').replace(/[《》]/g, '').trim();
 
-  // 小说链接
-  const novelLink = (md.match(/【小说在哪看】[^\n]+/)?.[0] || '').replace(/【小说在哪看】/, '').trim();
-  const collectionLink = (md.match(/【已推小说合集】[^\n]+/)?.[0] || '').replace(/【已推小说合集】/, '').trim();
+  // 基本信息行
+  const metaParts = [];
+  if (rating) metaParts.push(`分级：${rating}`);
+  if (workTitle) metaParts.push(`原作：《${workTitle}》`);
+  if (author) metaParts.push(`作者：${author}`);
+  if (cp) metaParts.push(`CP：${cp}`);
+  if (tagsRaw.length) metaParts.push(`标签：${tagsRaw.join('、')}`);
+  const metaStr = metaParts.join('　');
 
-  // 分章节
+  // 章节解析（00 链接 + 01~05 正文）
   const sections = parseSections(md);
-  const sectionLabels = ['文案推荐', 'Fanst 碎碎念', '名场面预警', '最戳我的一个细节', '综合评价',
-    '避雷点', '踩雷预警', '最戳我的一个槽点'];
-  const labelNums = {
-    '文案推荐': '01', 'Fanst 碎碎念': '02', '名场面预警': '03', '最戳我的一个细节': '04', '综合评价': '05',
-    '避雷点': '01', '踩雷预警': '03', '最戳我的一个槽点': '04',
+  const labelMap = {
+    '小说哪里看':       { num: '00', en: 'GUIDE · 阅读入口' },
+    '文案推荐':         { num: '01', en: 'SYNOPSIS · 沦陷的开端' },
+    'Fanst 碎碎念':     { num: '02', en: 'THOUGHTS · 黑咖啡般的回味' },
+    '名场面预警':       { num: '03', en: 'HIGHLIGHT · 带着刺的温柔' },
+    '最戳我的一个细节': { num: '04', en: 'DETAIL · 一块旧浴巾的尊重' },
+    '综合评价':         { num: '///', en: 'VERDICT · 压得住阵脚的存在' },
+    '避雷点':           { num: '01', en: 'WARNING · 先睹为快' },
+    '踩雷预警':         { num: '03', en: 'CAUTION · 谨慎阅读' },
+    '最戳我的一个槽点': { num: '04', en: 'FLAW · 瑕不掩瑜' },
   };
 
+  // 构建章节 HTML
   let sectionHtml = '';
-  sectionLabels.forEach(label => {
-    const sec = sections.find(s => s.label === label || s.label.endsWith(' ' + label) || s.label.includes(label));
-    if (sec) sectionHtml += renderSectionForMagazine(labelNums[label], label, sec.body);
+  sections.forEach(sec => {
+    const key = Object.keys(labelMap).find(k => sec.label === k || sec.label.includes(k));
+    const cfg = key ? labelMap[key] : null;
+    const cn = sec.label.replace(/^\d+\s*/, '');
+    const en = cfg ? cfg.en : '';
+    const num = cfg ? cfg.num : '';
+
+    if (key === '小说哪里看') {
+      // 00 章节：标题 + 链接正文
+      sectionHtml += OLIVE.sectionTitle(num, cn, en);
+      sectionHtml += renderWeChatBody(sec.body);
+    } else {
+      sectionHtml += OLIVE.sectionTitle(num, cn, en);
+      sectionHtml += renderWeChatBody(sec.body);
+    }
   });
 
-  // 标签
-  const tagsHtml = tags.length ? tags.map(t =>
-    `<span style="display:inline-block;padding:3px 12px;background:#eef5fb;color:#2d72ad;border-radius:20px;font-size:12px;margin:0 6px 4px 0;">${escapeHtml(t)}</span>`
-  ).join('') : '';
+  // 标签（头图卡底部用）
+  const heroTags = tagsRaw.slice(0, 2);
 
-  // 资源链接
-  const resourceHtml = (novelLink || collectionLink) ? `
-    <span style="display:block;margin-bottom:4px;">📖 <strong>小说在哪看</strong>：${escapeHtml(novelLink || '小说阅读途径 →')}</span>
-    <span style="display:block;">📚 <strong>已推小说合集</strong>：${escapeHtml(collectionLink || '已推小说合集 →')}</span>` : '';
-
-  return `
-<table cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:640px;width:100%;background:#fafcfd;">
-
-  <!-- 角色图占位 -->
-  <tr><td style="padding:0;">
-    <p style="margin:0;padding:60px 0;text-align:center;font-size:13px;color:rgba(59,130,197,0.5);background:linear-gradient(135deg,#c8ddf5,#a8cdf0,#f5d8e2,#fad2e0);">📷 在此插入角色图片</p>
-    <p style="margin:0;height:3px;background:#3B82C5;font-size:0;line-height:0;">&nbsp;</p>
-  </td></tr>
-
-  <!-- 信息卡 -->
-  <tr><td style="padding:18px 16px 14px 16px;background:#fff;">
-    <p style="margin:0;font-size:14px;line-height:2.2;color:#3a3a3a;">
-      ${rating ? `<span style="color:#888;font-size:13px;">分级</span> <span style="color:#3B82C5;">${escapeHtml(rating)}</span><br>` : ''}
-      ${workTitle ? `<span style="color:#888;font-size:13px;">原作</span> <span style="color:#1a1a1a;">《${escapeHtml(workTitle)}》</span><br>` : ''}
-      ${cp ? `<span style="color:#888;font-size:13px;">CP</span> <span style="color:#3B82C5;">${escapeHtml(cp)}</span><br>` : ''}
-      ${author ? `<span style="color:#888;font-size:13px;">作者</span> <span style="color:#1a1a1a;">${escapeHtml(author)}</span>` : ''}
-    </p>
-    ${tagsHtml ? `<p style="margin:10px 0 0 0;line-height:2;">${tagsHtml}</p>` : ''}
-  </td></tr>
-
-  <!-- 小说链接 -->
-  ${resourceHtml ? `<tr><td style="padding:14px 16px;font-size:13px;line-height:1.8;color:#3a3a3a;">${resourceHtml}</td></tr>` : ''}
-
-  <!-- 正文章节 -->
-  ${sectionHtml}
-
-  <!-- 收尾 -->
-  <tr><td style="padding:28px 16px 24px 16px;text-align:center;background:linear-gradient(180deg,#fdf2f5,#eef5fb);">
-    <p style="margin:0 0 16px 0;font-size:12px;line-height:2;color:#888;">
-      所有荣誉与利益属于作者和创作者。<br>即使不了解角色，该书仍可当成独立小说看待。
-    </p>
-    <table cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:10px 24px;background:#fff;border:1px solid #E8739A;border-radius:6px;">
-      <p style="margin:0;font-size:14px;color:#E8739A;">💬 非常需要你的推荐留言或观后感！</p>
-    </td></tr></table>
-  </td></tr>
-
-</table>`;
+  return (
+    OLIVE.globalOpen() +
+    OLIVE.heroCard('FANFIC · 深度书评', title, '推文精选', tagsRaw.join(' · '), `同人佳作推荐：${escapeHtml(title)}`, heroTags) +
+    OLIVE.editorNote('基本信息', metaStr) +
+    sectionHtml +
+    OLIVE.endingActions() +
+    '<section style="margin-top:8px;text-align:center;"><p style="margin:0;font-size:11px;line-height:1.8;color:#9ea096;font-family:\'IBM Plex Sans\',sans-serif;">' + LEAF('所有荣誉与利益属于作者和创作者。即使不了解角色，该书仍可当成独立小说看待。') + '</p></section>' +
+    OLIVE.globalClose() +
+    OLIVE.hiddenMark()
+  );
 }
 
 function parseSections(md) {
   const sections = [];
-  // 统一换行符 + 确保首个 ### 能被匹配
   const normalized = '\n' + md.replace(/\r\n/g, '\n');
   const parts = normalized.split(/\n###\s+/);
   for (let i = 1; i < parts.length; i++) {
@@ -1020,30 +1152,17 @@ function parseSections(md) {
 }
 
 function renderSectionForMagazine(num, label, body) {
-  const bodyHtml = renderWeChatBody(body);
-  return `
-  <tr><td style="padding:0 16px;">
-    <p style="margin:20px 0 4px 0;">
-      <span style="font-size:36px;font-weight:700;line-height:1;color:#3B82C5;">${num}</span>
-      <span style="font-size:18px;font-weight:700;color:#1a1a1a;margin-left:8px;">${escapeHtml(label)}</span>
-    </p>
-    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.85;color:#3a3a3a;">${bodyHtml}</p>
-  </td></tr>`;
+  return OLIVE.sectionTitle(num, label, '') + renderWeChatBody(body);
 }
 
 function renderWeChatBody(body) {
-  // 解析段落、引用块、分隔线
   const lines = body.split('\n');
   let html = '';
   let inQuote = false;
   let inList = false;
 
-  const flushQuote = () => {
-    if (inQuote) { html += '</span>'; inQuote = false; }
-  };
-  const flushList = () => {
-    if (inList) { html += '</ul>'; inList = false; }
-  };
+  const flushQuote = () => { if (inQuote) { html += '</section></section></section>'; inQuote = false; } };
+  const flushList = () => { if (inList) { html += '</ul></section></section>'; inList = false; } };
 
   for (const rawLine of lines) {
     const l = rawLine.trim();
@@ -1052,41 +1171,40 @@ function renderWeChatBody(body) {
     // 分隔线
     if (/^[-*_]{3,}$/.test(l) || l === '· · ·') {
       flushQuote(); flushList();
-      html += '<span style="display:block;text-align:center;margin:12px 0;color:#d5cec4;font-size:11px;">· · ·</span>';
+      html += '<section style="margin-top:24px;"><section style="font-family:IBM Plex Sans,sans-serif;"><hr style="border:none;height:2px;background:#bfc1b7;margin:0;"></section></section>';
       continue;
     }
 
-    // 引用块
+    // 引用块 → 重点观点卡
     if (l.startsWith('> ')) {
       flushList();
+      // 联排多行引用合并成一张卡
       if (!inQuote) {
-        html += '<span style="display:block;margin:14px 0;padding:14px 16px;background:#fdf2f5;border-left:1px solid #E8739A;">';
+        html += '<section style="margin-top:24px;"><section style="font-family:IBM Plex Sans,sans-serif;"><section style="background:#fdfdf8;border-radius:6px;padding:16px 18px;border:1px solid #bfc1b7;">';
         inQuote = true;
       }
-      html += `<span style="display:block;font-size:13px;line-height:1.85;color:#3a3a3a;font-style:italic;margin-bottom:6px;">${inlineMdWeChat(l.slice(2))}</span>`;
+      html += `<p style="font-size:14px;color:#4d4f46;margin:0 0 8px;line-height:1.8;text-align:justify;">${inlineMdWeChat(l.slice(2))}</p>`;
       continue;
     } else {
-      if (inQuote) { html += '</span>'; inQuote = false; }
-    }
-
-    // 标题
-    const h = l.match(/^#{1,3}\s+(.+)/);
-    if (h) {
-      flushList();
-      html += `<p style="font-weight:700;color:#1a1a1a;margin:12px 0 8px;">${inlineMdWeChat(h[1])}</p>`;
-      continue;
+      if (inQuote) { html += '</section></section></section>'; inQuote = false; }
     }
 
     // 列表项
     if (l.startsWith('- ') || l.startsWith('* ')) {
       flushQuote();
-      if (!inList) { html += '<ul style="margin:0 0 10px 18px;padding:0;list-style:disc;">'; inList = true; }
-      html += `<li style="margin-bottom:4px;">${inlineMdWeChat(l.slice(2))}</li>`;
+      if (!inList) {
+        html += '<section style="margin-top:24px;"><section style="font-family:IBM Plex Sans,sans-serif;"><ul style="margin:0;padding-left:22px;line-height:1.8;list-style-position:outside;">';
+        inList = true;
+      }
+      html += `<li style="margin-bottom:8px;font-size:15px;color:#4d4f46;list-style-type:disc;"><section>${inlineMdWeChat(l.slice(2))}</section></li>`;
       continue;
+    } else {
+      flushList();
     }
 
-    flushQuote(); flushList();
-    html += `<span style="display:block;margin-bottom:12px;">${inlineMdWeChat(l)}</span>`;
+    // 普通段落
+    flushQuote();
+    html += `<section style="margin-top:24px;"><section style="font-family:IBM Plex Sans,sans-serif;"><p style="margin:0;font-size:14px;line-height:1.9;text-align:justify;color:#4d4f46;">${inlineMdWeChat(l)}</p></section></section>`;
   }
 
   flushQuote();
@@ -1096,8 +1214,8 @@ function renderWeChatBody(body) {
 
 function inlineMdWeChat(text) {
   return escapeHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#1a1a1a;font-weight:600;">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em style="font-style:italic;color:#3a3a3a;">$1</em>');
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#23251d;"><span leaf="">$1</span></strong>')
+    .replace(/\*(.+?)\*/g, '<em style="font-style:italic;color:#4d4f46;"><span leaf="">$1</span></em>');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
