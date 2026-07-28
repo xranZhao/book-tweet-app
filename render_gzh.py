@@ -315,11 +315,18 @@ def render_body(body_text):
             html_parts.append(bullet_list(list_items))
             continue
 
-        # 普通段落 → 收集连续非空行
+        # 普通段落 → 收集连续非空行（【开头的行独立成段）
+        if line.startswith('【'):
+            # 【链接/引用类短行】单独成段，不合并
+            html_parts.append(paragraph(inline_markdown(line)))
+            i += 1
+            continue
+
         para_lines = []
         while i < len(lines) and lines[i].strip() and \
               not lines[i].strip().startswith('> ') and \
               not lines[i].strip().startswith('#') and \
+              not lines[i].strip().startswith('【') and \
               not re.match(r'^[-*] ', lines[i].strip()) and \
               not re.match(r'^[-*_]{3,}$', lines[i].strip()):
             para_lines.append(lines[i].strip())
