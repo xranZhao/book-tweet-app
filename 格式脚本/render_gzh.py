@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """推文助手 · 电脑端排版脚本
-用法：
-    python render_gzh.py "文章.md"
-    python render_gzh.py "文章.md" "推文标题"    （指定标题）
-    python render_gzh.py "文章.md" "推文标题" "2026.08"  （指定日期）
-输出：
-    文章_排版_橄榄手记.html
-
 固定规则排版，无 AI 参与。每次同样输入 → 同样输出。
+
+用法（单篇）：
+    python render_gzh.py "文章.md"
+    python render_gzh.py "文章.md" "推文标题"
+    python render_gzh.py "文章.md" "推文标题" "2026.08"
+
+用法（批量）：
+    python render_gzh.py --all
+    扫描 ..\\原md\\*.md，批量产出 HTML 到当前目录
 """
 
 import re
 import sys
 import os
+import glob
 from html import escape as html_escape
 
 
@@ -487,43 +490,69 @@ def render(md_text, override_title=None, date_str=None):
 # CLI
 # ═══════════════════════════════════════════════════════════════════
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_DIR = os.path.join(ROOT, '原md')
+OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 def main():
-    if len(sys.argv) < 2:
-        print('用法：python render_gzh.py "文章.md" [标题] [日期]')
-        print('示例：python render_gzh.py "A-Marriage-of-inconvenience.md"')
-        print('      python render_gzh.py "手稿.md" "我的文章标题" "2026.08"')
-        sys.exit(1)
+    """
+    单篇：python render_gzh.py "文章.md" ["标题"] ["日期"]
+    批量：python render_gzh.py --all
+    无参：python render_gzh.py   → 自动批量扫描 ..\\原md\\*.md
+    """
+    if len(sys.argv) >= 2 and sys.argv[1] == '--all':
+        batch_render()
+        return
 
-    md_path = sys.argv[1]
-    override_title = sys.argv[2] if len(sys.argv) >= 3 else None
-    date_str = sys.argv[3] if len(sys.argv) >= 4 else None
+    if len(sys.argv) >= 2:
+        single_render(sys.argv[1],
+                      sys.argv[2] if len(sys.argv) >= 3 else None,
+                      sys.argv[3] if len(sys.argv) >= 4 else None)
+    else:
+        batch_render()
 
+
+def single_render(md_path, override_title=None, date_str=None):
     global CURRENT_DATE
     if date_str:
         CURRENT_DATE = date_str
-
-    # 读文件
     if not os.path.exists(md_path):
         print(f'文件不存在：{md_path}')
         sys.exit(1)
-
-    with open(md_path, 'r', encoding='utf-8') as f:
-        md_text = f.read()
-
+    md_text = read_md(md_path)
     html = render(md_text, override_title, date_str)
+    write_html(md_path, html)
+    print(f'下一步：打开输出文件 → Ctrl+A Ctrl+C → 到公众号编辑器粘贴')
 
-    # 输出路径
+
+def batch_render():
+    if not os.path.isdir(SRC_DIR):
+        print(f'原md 目录不存在：{SRC_DIR}')
+        sys.exit(1)
+    md_files = sorted(glob.glob(os.path.join(SRC_DIR, '*.md')))
+    if not md_files:
+        print(f'原md 目录下没有 .md 文件：{SRC_DIR}')
+        sys.exit(1)
+    print(f'发现 {len(md_files)} 篇 .md，开始批量排版...\n')
+    for md_path in md_files:
+        md_text = read_md(md_path)
+        html = render(md_text)
+        write_html(md_path, html)
+    print(f'\n全部完成，共 {len(md_files)} 篇')
+
+
+def read_md(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def write_html(md_path, html):
     base = os.path.splitext(os.path.basename(md_path))[0]
-    out_dir = os.path.dirname(os.path.abspath(md_path))
-    out_path = os.path.join(out_dir, f'{base}_排版_橄榄手记.html')
-
+    out_path = os.path.join(OUT_DIR, f'{base}_排版_橄榄手记.html')
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
-
-    print(f'✅ 排版完成')
-    print(f'   输入：{md_path}')
-    print(f'   输出：{out_path}')
-    print(f'   下一步：打开输出文件 → Ctrl+A Ctrl+C → 到公众号编辑器粘贴')
+    print(f'✅ {base} → {out_path}')
 
 
 if __name__ == '__main__':
