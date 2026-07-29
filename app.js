@@ -94,11 +94,11 @@ function escapeHtml(s) {
 function updateStyleHint() {
   const hints = {
     restrained: '深度书评 · 纯文字 · 句长均匀',
-    balanced: '有长短句节奏 · 无 emoji · Fanst 70% + 节奏 30%',
-    social: '快节奏 · 有 emoji · 小红书风 · 可轻叹',
+    balanced: '有长短句节奏 · 无 emoji',
+    social: '快节奏 · 有 emoji · 小红书风',
   };
   const el = $('#style-hint');
-  if (el) el.textContent = hints[currentStyle] || '';
+  if (el) el.textContent = '生成阶段轻量引导，审校阶段深度加工 · ' + (hints[currentStyle] || '');
 }
 
 function renderMarkdown(md) {
@@ -723,7 +723,7 @@ async function generateDraft() {
 ${session.readReport}
 
 风格指南：
-${getStylePrompt()}
+${getDraftHint()}
 
 要求：
 - 全文控制在 1500 字左右（含信息卡），不要写超长文
@@ -786,11 +786,13 @@ function showRevise() {
         <input type="text" id="revise-input" placeholder="例如：第二段太啰嗦，第三段加一段名场面">
       </div>
       <button class="btn btn-primary btn-block" id="btn-ai-revise" style="margin-bottom:10px;">让 AI 按上面意见改</button>
+      <button class="btn btn-accent btn-block" id="btn-ai-polish" style="margin-bottom:10px;">✨ AI 审校润色（去 AI 味 + 风格调整）</button>
       <button class="btn btn-pink btn-block" id="btn-finalize" style="margin-bottom:10px;">定稿并查看成品</button>
       <button class="btn btn-ghost btn-block" onclick="showTitleSelector()">返回改标题</button>
     </div>`;
   $('#btn-copy-title-revise').onclick = () => copyText(title);
   $('#btn-ai-revise').onclick = aiRevise;
+  $('#btn-ai-polish').onclick = aiPolish;
   $('#btn-finalize').onclick = () => {
     const md = $('#md-editor') ? $('#md-editor').value : session.finalMd;
     session.finalMd = md;
@@ -871,6 +873,68 @@ ${current}`;
     $('#btn-ai-revise').textContent = '让 AI 按上面意见改';
     $('#btn-ai-revise').disabled = false;
     alert('修改失败：' + e.message);
+  }
+}
+
+/* ─── AI 审校润色（第二步：去 AI 味 + 风格调整） ─── */
+async function aiPolish() {
+  const current = $('#md-editor') ? $('#md-editor').value : session.finalMd;
+  if (!current) { toast('没有可审校的内容'); return; }
+  const startTime = Date.now();
+  $('#btn-ai-polish').textContent = '审校中...';
+  $('#btn-ai-polish').disabled = true;
+
+  // 进度条
+  const polishArea = $('#btn-ai-polish').parentNode;
+  const progEl = document.createElement('div');
+  progEl.id = 'polish-progress';
+  progEl.innerHTML = `
+    <div class="progress-bar-wrapper" style="padding:8px 0;">
+      <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+    </div>
+    <p id="polish-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
+  `;
+  polishArea.insertBefore(progEl, $('#btn-ai-polish'));
+
+  const timerInterval = setInterval(() => {
+    const el = $('#polish-elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
+
+  const prompt = `${getPolishPrompt()}
+
+现在请对以下推书文初稿进行去 AI 味润色。记住：你是编辑，不是作者。只改需要改的地方，保留原文的结构、信息和已经很好的段落。
+
+初稿如下：
+${current}`;
+
+  try {
+    const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
+    clearInterval(timerInterval);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+    // 移除进度条
+    const progEl = $('#polish-progress');
+    if (progEl) progEl.remove();
+    let polished = res.replace(/^#\s*.+\n+/m, '');
+    polished = polished.replace(/^##\s+/gm, '### ');
+    session.finalMd = polished;
+    session.draftMd = polished;
+    saveSession();
+    if (session.previewMode) {
+      switchEditorTab(true);
+    } else {
+      $('#md-editor').value = polished;
+    }
+    $('#btn-ai-polish').textContent = '✨ AI 审校润色（去 AI 味 + 风格调整）';
+    $('#btn-ai-polish').disabled = false;
+    toast(`审校完成 · 耗时 ${elapsed} 秒`);
+  } catch (e) {
+    clearInterval(timerInterval);
+    const progEl = $('#polish-progress');
+    if (progEl) progEl.remove();
+    $('#btn-ai-polish').textContent = '✨ AI 审校润色（去 AI 味 + 风格调整）';
+    $('#btn-ai-polish').disabled = false;
+    alert('审校失败：' + e.message);
   }
 }
 
