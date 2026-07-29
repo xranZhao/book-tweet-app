@@ -9,19 +9,21 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 
 /* ─── State ─── */
-const STEPS = ['判定', '标题', '草稿', '定稿'];
+const STEPS = ['角度', '深度', '标题', '定稿'];
 const EMPTY_BOOK = () => ({
   title: '', file: null, text: '', chars: 0, ext: '',
 });
 const EMPTY_SESSION = () => ({
   book: null,           // 当前书籍信息
-  readReport: null,     // AI 阅读报告
+  angleReports: null,   // 四个角度的摘要报告 {cp, family, plot, general}
+  selectedAngle: '',    // 用户选择的角度: cp|family|plot|general
+  deepReport: null,     // 选定角度的深度结构化报告
   verdict: '',          // 判定结果
   titleOptions: [],     // 标题候选
   selectedTitle: '',    // 选中的标题
   draftMd: '',          // AI 生成的初稿
   finalMd: '',          // 定稿 markdown
-  step: 0,              // 当前步骤: 0=已上传, 1=已判定, 2=已选标题, 3=已定稿
+  step: 0,              // 0=已上传, 1=角度摘要, 2=深度报告, 3=已选标题, 4=已定稿
   previewMode: false,   // 编辑/预览切换
 });
 let session = EMPTY_SESSION();
@@ -30,7 +32,9 @@ function saveSession() {
   if (!session.book) return;
   localStorage.setItem('tweet_session', JSON.stringify({
     book: session.book,
-    readReport: session.readReport,
+    angleReports: session.angleReports,
+    selectedAngle: session.selectedAngle,
+    deepReport: session.deepReport,
     verdict: session.verdict,
     titleOptions: session.titleOptions,
     selectedTitle: session.selectedTitle,
@@ -45,7 +49,9 @@ function loadSession() {
     if (raw) {
       const s = JSON.parse(raw);
       session.book = s.book || null;
-      session.readReport = s.readReport || null;
+      session.angleReports = s.angleReports || null;
+      session.selectedAngle = s.selectedAngle || '';
+      session.deepReport = s.deepReport || null;
       session.verdict = s.verdict || '';
       session.titleOptions = s.titleOptions || [];
       session.selectedTitle = s.selectedTitle || '';
@@ -395,14 +401,15 @@ function renderReading() {
   }
   const step = session.step;
   // step > 0 → 从之前的步骤继续
-  if (step >= 3 && session.finalMd) {
+  if (step >= 4 && session.finalMd) {
     showRevise();
-  } else if (step >= 2 && session.draftMd) {
+  } else if (step >= 3 && session.draftMd) {
     showRevise();
-  } else if (step >= 1 && session.readReport) {
-    // 已有判定 → 显示阅读报告（如果已选标题则跳到标题选择）
+  } else if (step >= 2 && session.deepReport) {
     if (session.selectedTitle) showTitleSelector();
-    else showReadingReport();
+    else showDeepReport();
+  } else if (step >= 1 && session.angleReports) {
+    showAngleSelector();
   } else {
     showBookMenu();
   }
@@ -425,7 +432,7 @@ function showBookMenu() {
         准备好后点击下方按钮，AI 会通读全文并给出推荐判定。<br>
         Flash 模型省钱快速，大约 30-90 秒。
       </div>
-      <button class="btn btn-primary btn-block" id="btn-read" style="margin-bottom:12px;">🤖 AI 阅读并判定</button>
+      <button class="btn btn-primary btn-block" id="btn-read" style="margin-bottom:12px;">🤖 AI 阅读 · 生成多角度报告</button>
       <button class="btn btn-ghost btn-block" onclick="navTo('upload')">返回上传</button>
     </div>`;
   $('#btn-read').onclick = runReading;
@@ -451,7 +458,7 @@ async function runReading() {
       </div>
       <div class="loading" style="padding:20px 16px;">
         <p id="elapsed-text">⏱ 已等待 0 秒</p>
-        <p style="font-size:12px;color:var(--text-lighter);">Flash 模型 · 约 30-90 秒</p>
+        <p style="font-size:12px;color:var(--text-lighter);">Flash 模型 · 四角度并行分析 · 约 60-120 秒</p>
       </div>
     </div>`;
 
@@ -462,13 +469,19 @@ async function runReading() {
   }, 1000);
 
   const text = truncateText(b.text, 200000);
-  const prompt = `请阅读以下小说全文，输出一份结构化的阅读报告。要求：
-1. 真实简介（基于原文，不要编造；控制在 2-3 句话）
-2. 作者、字数、完结状态（简明列出；如无法获取作者信息，直说"作者未知"）
-3. 文笔评价：是否流畅、情感描写是否细腻、剧情是否保留完整（控制在 1-2 句话）
-4. 雷点 / 避雷预警：如强制婚姻、黑化、OOC、未完结、BE 等
-5. 最终判定四选一：强推 / 可推 / 避雷可写 / 不推不写，并给出简短理由
-6. 总字数控制在 1000 字以内，不要复述剧情细节，减少冗长描述
+  const prompt = `请阅读以下小说全文，从四个角度分别输出简短的阅读报告。每个角度控制在 150-300 字，聚焦该角度最值得写的点。同时给出一个综合判定。
+
+输出格式（严格按此结构）：
+【cp向】
+（聚焦感情线：概括 CP 关系动态、糖点/虐点分布、感情线节奏、可以从哪个角度切入推文）
+【亲情向】
+（聚焦家庭/亲情线：概括关键亲情关系、家庭冲突或温情场景、可以从哪个角度切入推文）
+【剧情向】
+（聚焦剧情与世界观：概括核心剧情亮点、设定特色、悬念或反转、可以从哪个角度切入推文）
+【综合向】
+（兼顾 CP + 亲情 + 剧情 + 人物成长，做全面概括，可以从哪个角度切入推文）
+【判定】
+（强推 / 可推 / 避雷可写 / 不推不写，并给简短理由）
 
 小说全文：
 ${text}`;
@@ -476,7 +489,7 @@ ${text}`;
   try {
     const res = await deepSeekChat(CONFIG.READ_MODEL, prompt, 4000);
     clearInterval(timerInterval);
-    session.readReport = res;
+    session.angleReports = parseAngleReports(res);
     session.readReportTime = ((Date.now() - startTime) / 1000).toFixed(0);
     session.step = 1;
     // 提取判定
@@ -485,7 +498,7 @@ ${text}`;
     else if (res.includes('避雷可写')) session.verdict = '避雷可写';
     else session.verdict = '不推不写';
     saveSession();
-    showReadingReport();
+    showAngleSelector();
   } catch (e) {
     $('#main').innerHTML = `
       <div class="screen">
@@ -496,11 +509,38 @@ ${text}`;
   }
 }
 
-function showReadingReport() {
+function parseAngleReports(res) {
+  const out = { cp: '', family: '', plot: '', general: '' };
+  const sections = res.split(/【(.+?)】/g);
+  for (let i = 1; i < sections.length; i += 2) {
+    const key = sections[i].replace(/向$/, '').trim();
+    const content = (sections[i + 1] || '').trim();
+    if (key === 'cp' || key === 'CP') out.cp = content;
+    else if (key === '亲情') out.family = content;
+    else if (key === '剧情') out.plot = content;
+    else if (key === '综合') out.general = content;
+  }
+  // 兜底：如果解析失败，把整个结果放进综合
+  if (!out.cp && !out.family && !out.plot && !out.general) {
+    out.general = res.trim();
+  }
+  return out;
+}
+
+/* ─── 角度选择页 ─── */
+function showAngleSelector() {
   const b = session.book;
   const v = session.verdict;
   const verdictColor = v === '不推不写' ? 'var(--text-light)' : v === '避雷可写' ? 'var(--macaron-pink)' : 'var(--macaron-sky)';
-  const stepHtml = stepIndicator(1);
+  const stepHtml = stepIndicator(0);
+  const reports = session.angleReports || {};
+  const angles = [
+    { key: 'cp', icon: '💕', label: 'CP 向', desc: reports.cp || '（解析中...）' },
+    { key: 'family', icon: '👨‍👩‍👧', label: '亲情向', desc: reports.family || '（解析中...）' },
+    { key: 'plot', icon: '📖', label: '剧情向', desc: reports.plot || '（解析中...）' },
+    { key: 'general', icon: '🎭', label: '综合向', desc: reports.general || '（解析中...）' },
+  ];
+
   $('#main').innerHTML = `
     <div class="screen">
       <div class="book-info-bar">
@@ -513,22 +553,137 @@ function showReadingReport() {
         <div class="card-meta" style="color:${verdictColor};font-weight:700;">判定：${v}</div>
       </div>
       ${session.readReportTime ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;">✅ AI 阅读完成 · 耗时 ${session.readReportTime} 秒</div>` : ''}
-      <div class="report-card">${renderMarkdown(session.readReport)}</div>
+      <p style="font-size:14px;color:var(--text);margin:0 0 10px;">选择一个写作角度，AI 将基于此角度生成深度报告和推文：</p>
+      <div class="angle-grid" id="angle-grid">
+        ${angles.map((a, i) => {
+          const sel = session.selectedAngle === a.key ? ' selected' : '';
+          return `<button class="angle-card${sel}" data-angle="${a.key}">
+            <div class="angle-icon">${a.icon}</div>
+            <div class="angle-title">${a.label}</div>
+            <div class="angle-summary">${escapeHtml(a.desc.slice(0, 120))}${a.desc.length > 120 ? '...' : ''}</div>
+          </button>`;
+        }).join('')}
+      </div>
       ${v === '不推不写' ? `
         <button class="btn btn-ghost btn-block" id="btn-pass">标记"已过"</button>
       ` : `
-        <button class="btn btn-primary btn-block" id="btn-title-options" style="margin-bottom:12px;">生成标题候选</button>
+        <button class="btn btn-primary btn-block" id="btn-deep-report" style="margin-bottom:12px;">下一步：生成深度报告</button>
         <button class="btn btn-ghost btn-block" id="btn-pass">这书不推，标记"已过"</button>
       `}
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showBookMenu()">返回</button>
     </div>`;
+  // 角度点击
+  $('#angle-grid').onclick = (e) => {
+    const card = e.target.closest('.angle-card');
+    if (!card) return;
+    $$('.angle-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    session.selectedAngle = card.dataset.angle;
+    saveSession();
+  };
+  // 默认选中
+  if (!session.selectedAngle) {
+    session.selectedAngle = 'general';
+    const firstCard = $('.angle-card[data-angle="general"]');
+    if (firstCard) firstCard.classList.add('selected');
+    saveSession();
+  }
   $('#btn-pass').onclick = () => {
     toast('已标记"已过"');
     clearSession();
     navTo('upload');
   };
+  const btnDeep = $('#btn-deep-report');
+  if (btnDeep) btnDeep.onclick = () => runDeepReport();
+}
+
+/* ─── 深度阅读报告生成 ─── */
+async function runDeepReport() {
+  if (!session.selectedAngle) { toast('请先选择一个角度'); return; }
+  const angle = session.selectedAngle;
+  const angleLabels = { cp: 'CP 向', family: '亲情向', plot: '剧情向', general: '综合向' };
+  const startTime = Date.now();
+  const b = session.book;
+
+  $('#main').innerHTML = `
+    <div class="screen">
+      <div class="book-info-bar">
+        <span style="font-size:24px;flex-shrink:0;">🔬</span>
+        <span class="b-title">正在生成${angleLabels[angle] || ''}深度报告...</span>
+      </div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+      </div>
+      <div class="loading" style="padding:20px 16px;">
+        <p id="elapsed-text">⏱ 已等待 0 秒</p>
+        <p style="font-size:12px;color:var(--text-lighter);">Flash 模型 · 深度分析 · 约 30-60 秒</p>
+      </div>
+    </div>`;
+
+  const timerInterval = setInterval(() => {
+    const el = $('#elapsed-text');
+    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
+  }, 1000);
+
+  const text = truncateText(b.text, 200000);
+  const anglePrompts = {
+    cp: '聚焦 CP 感情线，输出结构化深度报告：1) 两人关系的完整演变（从初遇到结局）；2) 关键糖点/虐点场景（至少3处，带原文引用）；3) 感情线节奏分析（慢热/一见钟情/双向暗恋等）；4) 适合推文的切入角度建议（2-3个）；5) 雷点/避雷预警。总字数控制在800字以内。',
+    family: '聚焦家庭/亲情线，输出结构化深度报告：1) 核心亲情关系图谱；2) 关键家庭场景（至少3处，带原文引用）；3) 亲情线的温度和冲突点；4) 适合推文的切入角度建议（2-3个）；5) 雷点/避雷预警。总字数控制在800字以内。',
+    plot: '聚焦剧情与世界观，输出结构化深度报告：1) 核心剧情脉络和关键转折；2) 世界观/设定亮点；3) 叙事结构和节奏分析；4) 适合推文的切入角度建议（2-3个）；5) 雷点/避雷预警。总字数控制在800字以内。',
+    general: '输出综合结构化深度报告：1) CP 感情线核心看点；2) 亲情/家庭线核心看点；3) 剧情与世界观亮点；4) 人物成长弧光；5) 适合推文的切入角度建议（2-3个，标注每个建议偏向哪个角度）；6) 雷点/避雷预警。总字数控制在800字以内。',
+  };
+
+  const prompt = `请阅读以下小说全文，按此要求输出深度阅读报告：
+
+${anglePrompts[angle] || anglePrompts.general}
+
+输出格式：直接输出 Markdown 结构的报告，包括"基础信息"（作者/字数/标签）、"核心看点"、"关键场景"、"切入建议"、"避雷预警"五个板块。
+
+小说全文：
+${text}`;
+
+  try {
+    const res = await deepSeekChat(CONFIG.READ_MODEL, prompt, 4000);
+    clearInterval(timerInterval);
+    session.deepReport = res;
+    session.deepReportTime = ((Date.now() - startTime) / 1000).toFixed(0);
+    session.step = 2;
+    saveSession();
+    showDeepReport();
+  } catch (e) {
+    $('#main').innerHTML = `
+      <div class="screen">
+        <div class="loading">深度报告生成失败：${escapeHtml(e.message)}</div>
+        <button class="btn btn-primary btn-block" onclick="runDeepReport()">重试</button>
+        <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showAngleSelector()">返回选角度</button>
+      </div>`;
+  }
+}
+
+/* ─── 深度报告展示页 ─── */
+function showDeepReport() {
+  const b = session.book;
+  const angleLabels = { cp: '💕 CP 向', family: '👨‍👩‍👧 亲情向', plot: '📖 剧情向', general: '🎭 综合向' };
+  const stepHtml = stepIndicator(2);
+  $('#main').innerHTML = `
+    <div class="screen">
+      <div class="book-info-bar">
+        <span style="font-size:24px;flex-shrink:0;">🔬</span>
+        <span class="b-title">${escapeHtml(b.title)}</span>
+      </div>
+      ${stepHtml}
+      <div class="card">
+        <div class="card-title">${angleLabels[session.selectedAngle] || ''} · 深度报告</div>
+      </div>
+      ${session.deepReportTime ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;">✅ 深度报告完成 · 耗时 ${session.deepReportTime} 秒</div>` : ''}
+      <div class="report-card">${renderMarkdown(session.deepReport)}</div>
+      <button class="btn btn-primary btn-block" id="btn-title-options" style="margin-bottom:12px;">生成标题候选</button>
+      <button class="btn btn-ghost btn-block" id="btn-back-angle" style="margin-bottom:8px;">返回修改角度</button>
+      <button class="btn btn-ghost btn-block" onclick="showBookMenu()">返回</button>
+    </div>`;
   const tbtn = $('#btn-title-options');
   if (tbtn) tbtn.onclick = () => generateTitleOptions();
+  $('#btn-back-angle').onclick = () => showAngleSelector();
 }
 
 function stepIndicator(currentIdx) {
@@ -544,7 +699,7 @@ function stepIndicator(currentIdx) {
 
 /* ─── Title generation ─── */
 async function generateTitleOptions() {
-  if (!session.readReport) return;
+  if (!session.deepReport) return;
   const startTime = Date.now();
   $('#main').innerHTML = `
     <div class="screen">
@@ -566,7 +721,7 @@ async function generateTitleOptions() {
     if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
   }, 1000);
 
-  const prompt = `根据以下阅读报告，为这篇小说的公众号推文生成 5 个标题候选。
+  const prompt = `根据以下深度阅读报告，为这篇小说的公众号推文生成 5 个标题候选。
 
 要求：
 - 每个标题贴合剧情、有吸引力、适合 1500 字公众号推文
@@ -578,8 +733,8 @@ async function generateTitleOptions() {
 - 只输出 5 行标题，每行前面加编号 1-5，不要多余解释
 - 每个标题（含标点符号）控制在 20 字左右，不超过 25 字
 
-阅读报告：
-${session.readReport}`;
+深度报告：
+${session.deepReport}`;
 
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 2000, 120000);
@@ -598,7 +753,7 @@ ${session.readReport}`;
       <div class="screen">
         <div class="loading">标题生成失败：${escapeHtml(e.message)}</div>
         <button class="btn btn-primary btn-block" onclick="generateTitleOptions()">重试</button>
-        <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showReadingReport()">返回</button>
+        <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showDeepReport()">返回</button>
       </div>`;
   }
 }
@@ -611,7 +766,7 @@ function showTitleSelector() {
         <span style="font-size:24px;flex-shrink:0;">✏️</span>
         <span class="b-title">${escapeHtml(session.book.title)}</span>
       </div>
-      ${stepIndicator(2)}
+      ${stepIndicator(3)}
       <h3 style="margin-top:0;margin-bottom:12px;color:var(--text);">选择文章标题</h3>
       <div class="option-list" id="title-options">
         ${session.titleOptions.map((t, i) => `
@@ -638,7 +793,7 @@ function showTitleSelector() {
         <div class="style-hint" id="style-hint" style="font-size:12px;color:var(--text-lighter);margin-top:6px;"></div>
       </div>
       <button class="btn btn-primary btn-block" id="btn-generate-draft" style="margin-top:16px;">下一步：生成推文初稿</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="showReadingReport()">返回修改判定</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="showDeepReport()">返回修改标题</button>
     </div>`;
   // 初始化风格选择器
   const styleBtnHandler = (e) => {
@@ -687,6 +842,8 @@ async function generateDraft() {
 
   const isAvoid = session.verdict === '避雷可写';
   const title = session.selectedTitle || b.title;
+  const angle = session.selectedAngle || 'general';
+  const angleGuide = ANGLE_GUIDES[angle] || ANGLE_GUIDES.general;
 
   const prompt = `请根据以下信息，按「杂志风推文」结构写初稿，直接输出 Markdown。
 
@@ -719,8 +876,11 @@ async function generateDraft() {
 - 00 章节正文只包含上面指定的两行，不要加多余内容
 - 其他章节正常写 1-3 段短段落
 
-阅读报告（仅供参考，不要复述细节）：
-${session.readReport}
+深度阅读报告（素材来源，基于此报告创作，不要复述整份报告）：
+${session.deepReport}
+
+写作角度引导：
+${angleGuide}
 
 风格指南：
 ${getDraftHint()}
@@ -742,7 +902,7 @@ ${getDraftHint()}
     md = md.replace(/^##\s+/gm, '### ');
     session.draftMd = md;
     session.finalMd = md;
-    session.step = 2;
+    session.step = 3;
     saveSession();
     showRevise();
     toast(`初稿已生成 · 耗时 ${elapsed} 秒`);
@@ -767,7 +927,7 @@ function showRevise() {
         <span style="font-size:24px;flex-shrink:0;">📝</span>
         <span class="b-title">${escapeHtml(session.book.title)}</span>
       </div>
-      ${stepIndicator(3)}
+      ${stepIndicator(4)}
       <div class="title-card">
         <div class="title-label">文章标题</div>
         <div class="title-value">${escapeHtml(title)}</div>
@@ -796,7 +956,7 @@ function showRevise() {
   $('#btn-finalize').onclick = () => {
     const md = $('#md-editor') ? $('#md-editor').value : session.finalMd;
     session.finalMd = md;
-    session.step = 3;
+    session.step = 4;
     saveSession();
     showFinal();
   };
@@ -1403,7 +1563,7 @@ function showHistoryDetail(h) {
     session.draftMd = h.markdown;
     session.selectedTitle = h.title;
     session.verdict = h.verdict;
-    session.step = 3;
+    session.step = 4;
     saveSession();
     navTo('reading');
     showRevise();

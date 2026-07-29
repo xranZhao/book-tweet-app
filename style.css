@@ -96,6 +96,7 @@ button { font-family: inherit; border: none; cursor: pointer; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:active { opacity: 0.85; }
 .btn-pink { background: var(--macaron-pink); color: #fff; }
+.btn-accent { background: var(--accent); color: #fff; }
 .btn-ghost { background: var(--bg-card); border: 1px solid var(--border); color: var(--text); }
 .btn-danger { background: #fff; border: 1px solid #e74c3c; color: #e74c3c; }
 .btn-block { width: 100%; }
@@ -279,6 +280,19 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .step-dot.done { background: var(--accent); }
 .step-dot.active { background: var(--accent); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ─── Angle cards ─── */
+.angle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.angle-card {
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 14px 12px; cursor: pointer;
+  text-align: left; transition: all 0.2s;
+}
+.angle-card:hover { border-color: var(--accent); }
+.angle-card.selected { border-color: var(--accent); background: #f5efe2; box-shadow: 0 1px 8px rgba(177,121,22,0.15); }
+.angle-card .angle-icon { font-size: 24px; margin-bottom: 6px; }
+.angle-card .angle-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.angle-card .angle-summary { font-size: 12px; color: var(--text-light); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ─── Style selector ─── */
 .style-selector { display: flex; gap: 8px; }
