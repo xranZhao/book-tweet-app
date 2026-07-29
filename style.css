@@ -280,6 +280,20 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .step-dot.active { background: var(--accent); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
+/* ─── Style selector ─── */
+.style-selector { display: flex; gap: 8px; }
+.style-btn {
+  flex: 1; padding: 10px 8px; border: 1.5px solid var(--border);
+  border-radius: 10px; background: var(--bg-card); color: var(--text-light);
+  font-size: 13px; font-weight: 600; cursor: pointer; text-align: center;
+  transition: all 0.2s;
+}
+.style-btn:hover { border-color: var(--accent); color: var(--text); }
+.style-btn.selected {
+  border-color: var(--accent); background: #f5efe2; color: var(--accent);
+  box-shadow: 0 1px 6px rgba(177,121,22,0.12);
+}
+
 /* ─── Markdown content in chat bubble ─── */
 .chat-bubble {
   padding: 12px 14px; border-radius: 16px; margin-bottom: 10px;

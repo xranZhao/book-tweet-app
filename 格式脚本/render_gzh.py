@@ -145,6 +145,18 @@ def paragraph(text):
 </section>'''
 
 
+def compact_line(text):
+    """紧凑行（无上边距，用于连续【链接行】）"""
+    return f'''
+<section>
+  <section style="font-family:{FONT};">
+    <p style="margin:0;font-size:14px;line-height:1.9;text-align:justify;color:{BODY_C};">
+      {text}
+    </p>
+  </section>
+</section>'''
+
+
 def key_point_card(point_text, note_text=''):
     """重点观点卡（无橙色下划线）"""
     note_part = f'&nbsp;{leaf(escape(note_text))}' if note_text else ''
@@ -318,11 +330,15 @@ def render_body(body_text):
             html_parts.append(bullet_list(list_items))
             continue
 
-        # 普通段落 → 收集连续非空行（【开头的行独立成段）
+        # 【行：连续链接行紧凑排列，首行带间距，后续无间距
         if line.startswith('【'):
-            # 【链接/引用类短行】单独成段，不合并
-            html_parts.append(paragraph(inline_markdown(line)))
-            i += 1
+            combo = []
+            while i < len(lines) and lines[i].strip().startswith('【'):
+                combo.append(lines[i].strip())
+                i += 1
+            html_parts.append(paragraph(inline_markdown(combo[0])))
+            for extra in combo[1:]:
+                html_parts.append(compact_line(inline_markdown(extra)))
             continue
 
         para_lines = []

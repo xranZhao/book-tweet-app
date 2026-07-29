@@ -91,6 +91,16 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function updateStyleHint() {
+  const hints = {
+    restrained: '深度书评 · 纯文字 · 句长均匀',
+    balanced: '有长短句节奏 · 无 emoji · Fanst 70% + 节奏 30%',
+    social: '快节奏 · 有 emoji · 小红书风 · 可轻叹',
+  };
+  const el = $('#style-hint');
+  if (el) el.textContent = hints[currentStyle] || '';
+}
+
 function renderMarkdown(md) {
   const lines = md.split('\n');
   let html = '';
@@ -615,9 +625,32 @@ function showTitleSelector() {
         <div class="setting-label">或自定义标题</div>
         <input type="text" id="custom-title" placeholder="输入你想用的标题" value="${escapeHtml(session.selectedTitle || '')}">
       </div>
+      <div class="setting-group" style="margin-top:16px;">
+        <div class="setting-label">🎨 出文风格</div>
+        <div class="style-selector" id="style-selector">
+          ${['restrained','balanced','social'].map(s => {
+            const labels = { restrained: '📖 克制版', balanced: '⚖️ 平衡版', social: '📱 社媒版' };
+            const hints = { restrained: '深度书评 · 纯文字', balanced: '有节奏 · 无 emoji', social: '快节奏 · 小红书风' };
+            const sel = currentStyle === s ? ' selected' : '';
+            return `<button class="style-btn${sel}" data-style="${s}" title="${hints[s]}">${labels[s]}</button>`;
+          }).join('')}
+        </div>
+        <div class="style-hint" id="style-hint" style="font-size:12px;color:var(--text-lighter);margin-top:6px;"></div>
+      </div>
       <button class="btn btn-primary btn-block" id="btn-generate-draft" style="margin-top:16px;">下一步：生成推文初稿</button>
       <button class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="showReadingReport()">返回修改判定</button>
     </div>`;
+  // 初始化风格选择器
+  const styleBtnHandler = (e) => {
+    const btn = e.target.closest('.style-btn');
+    if (!btn) return;
+    $$('.style-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    saveStylePreference(btn.dataset.style);
+    updateStyleHint();
+  };
+  $('#style-selector').onclick = styleBtnHandler;
+  updateStyleHint();
   $('#btn-generate-draft').onclick = () => {
     const custom = $('#custom-title').value.trim();
     const selected = custom || document.querySelector('input[name="title"]:checked')?.value;
@@ -690,7 +723,7 @@ async function generateDraft() {
 ${session.readReport}
 
 风格指南：
-${STYLE_GUIDE_SEED}
+${getStylePrompt()}
 
 要求：
 - 全文控制在 1500 字左右（含信息卡），不要写超长文
