@@ -1,4 +1,4 @@
-const CACHE_NAME = "book-tweet-v1";
+const CACHE_NAME = "book-tweet-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
