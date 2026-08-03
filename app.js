@@ -1509,6 +1509,7 @@ function renderHistory() {
           const icon = h.verdict === '强推' ? '⭐' : h.verdict === '可推' ? '✅' : h.verdict === '避雷可写' ? '⚠️' : '📝';
           return `
             <div class="history-item" data-id="${h.id}">
+              <button class="h-delete" data-id="${h.id}" title="删除">🗑</button>
               <span class="h-icon">${icon}</span>
               <div class="h-body">
                 <div class="h-title">${escapeHtml(h.title)}</div>
@@ -1529,6 +1530,36 @@ function renderHistory() {
       const id = el.dataset.id;
       const h = getHistory().find(e => e.id === id);
       if (h) showHistoryDetail(h);
+    };
+  });
+  // 删除按钮
+  $$('.h-delete').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const h = getHistory().find(e => e.id === id);
+      if (!h) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'dialog-overlay';
+      overlay.innerHTML = `
+        <div class="dialog-box">
+          <h3>确认删除</h3>
+          <p>删除后无法恢复，确定要删除「${escapeHtml(h.title)}」吗？</p>
+          <div class="btn-row">
+            <button class="btn btn-ghost" id="dialog-cancel">取消</button>
+            <button class="btn btn-danger" id="dialog-confirm">删除</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      $('#dialog-cancel', overlay).onclick = () => overlay.remove();
+      $('#dialog-confirm', overlay).onclick = () => {
+        const history = getHistory().filter(e => e.id !== id);
+        localStorage.setItem('tweet_history', JSON.stringify(history));
+        overlay.remove();
+        toast('已删除');
+        updateHistoryBadge();
+        renderHistory();
+      };
     };
   });
   // 导出全部
