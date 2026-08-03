@@ -517,7 +517,9 @@ ${text}`;
 
 function parseAngleReports(res) {
   const out = { cp: '', family: '', plot: '', general: '' };
-  const sections = res.split(/【(.+?)】/g);
+  // 先合并 AI 可能加的多余换行（不超过3个连续换行）
+  const cleaned = res.replace(/\n{4,}/g, '\n\n\n');
+  const sections = cleaned.split(/【(.+?)】/s);
   for (let i = 1; i < sections.length; i += 2) {
     const key = sections[i].replace(/向$/, '').trim();
     const content = (sections[i + 1] || '').trim();
@@ -528,7 +530,7 @@ function parseAngleReports(res) {
   }
   // 兜底：如果解析失败，把整个结果放进综合
   if (!out.cp && !out.family && !out.plot && !out.general) {
-    out.general = res.trim();
+    out.general = cleaned.trim();
   }
   return out;
 }
@@ -577,16 +579,37 @@ function showAngleSelector() {
         <button class="btn btn-ghost btn-block" id="btn-pass">这书不推，标记"已过"</button>
       `}
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showBookMenu()">返回</button>
+      <div class="dialog-overlay hidden" id="angle-detail-dialog" onclick="this.classList.add('hidden')">
+        <div class="dialog-box" id="angle-detail-box" style="max-width:380px;text-align:left;" onclick="event.stopPropagation()">
+          <h3 id="angle-detail-title" style="margin:0 0 10px;"></h3>
+          <div id="angle-detail-body" style="font-size:14px;line-height:1.8;color:var(--text);max-height:400px;overflow-y:auto;"></div>
+          <button class="btn btn-primary btn-block" id="btn-angle-detail-close" style="margin-top:12px;">关闭</button>
+        </div>
+      </div>
     </div>`;
-  // 角度点击
+  // 角度点击：单击选中；再点已选中 → 弹浮窗看完整报告
   $('#angle-grid').onclick = (e) => {
     const card = e.target.closest('.angle-card');
     if (!card) return;
+    const key = card.dataset.angle;
+    // 已选中 → 弹出详情
+    if (key === session.selectedAngle) {
+      const a = angles.find(aa => aa.key === key);
+      if (a) {
+        const dialog = $('#angle-detail-dialog');
+        $('#angle-detail-title').textContent = a.label;
+        $('#angle-detail-body').innerHTML = renderMarkdown(a.desc);
+        dialog.classList.remove('hidden');
+      }
+      return;
+    }
+    // 选中
     $$('.angle-card').forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
     session.selectedAngle = card.dataset.angle;
     saveSession();
   };
+  $('#btn-angle-detail-close').onclick = () => $('#angle-detail-dialog').classList.add('hidden');
   // 默认选中
   if (!session.selectedAngle) {
     session.selectedAngle = 'general';
