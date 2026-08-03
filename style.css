@@ -309,8 +309,39 @@ input:focus, textarea:focus { border-color: var(--accent); }
 }
 
 /* ─── Markdown content in chat bubble ─── */
-.chat-bubble {
-  padding: 12px 14px; border-radius: 16px; margin-bottom: 10px;
-  font-size: 14px; line-height: 1.7;
+.version-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
-.chat-bubble.ai { background: var(--bubble-ai); border-bottom-left-radius: 4px; color: var(--text); }
+.version-tab {
+  flex: 1;
+  min-width: 70px;
+  padding: 8px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-light);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.version-tab.active {
+  border-color: var(--accent);
+  background: #f5efe2;
+  color: var(--accent);
+}
+.version-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.version-actions .btn {
+  width: 100%;
+}

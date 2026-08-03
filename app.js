@@ -21,8 +21,10 @@ const EMPTY_SESSION = () => ({
   verdict: '',          // 判定结果
   titleOptions: [],     // 标题候选
   selectedTitle: '',    // 选中的标题
-  draftMd: '',          // AI 生成的初稿
-  finalMd: '',          // 定稿 markdown
+  draftMd: '',          // AI 生成的中性初稿
+  finalMd: '',          // 当前选中的定稿 markdown
+  versions: {},         // 去 AI 味三版本 {restrained, balanced, social}
+  activeVersion: '',    // 当前激活的版本，空字符串表示初稿
   step: 0,              // 0=已上传, 1=角度摘要, 2=深度报告, 3=已选标题, 4=已定稿
   previewMode: false,   // 编辑/预览切换
 });
@@ -40,6 +42,8 @@ function saveSession() {
     selectedTitle: session.selectedTitle,
     draftMd: session.draftMd,
     finalMd: session.finalMd,
+    versions: session.versions,
+    activeVersion: session.activeVersion,
     step: session.step,
   }));
 }
@@ -57,6 +61,8 @@ function loadSession() {
       session.selectedTitle = s.selectedTitle || '';
       session.draftMd = s.draftMd || '';
       session.finalMd = s.finalMd || '';
+      session.versions = s.versions || {};
+      session.activeVersion = s.activeVersion || '';
       session.step = s.step || 0;
       session.previewMode = false;
       return true;
@@ -780,32 +786,9 @@ function showTitleSelector() {
         <div class="setting-label">或自定义标题</div>
         <input type="text" id="custom-title" placeholder="输入你想用的标题" value="${escapeHtml(session.selectedTitle || '')}">
       </div>
-      <div class="setting-group" style="margin-top:16px;">
-        <div class="setting-label">🎨 出文风格</div>
-        <div class="style-selector" id="style-selector">
-          ${['restrained','balanced','social'].map(s => {
-            const labels = { restrained: '📖 克制版', balanced: '⚖️ 平衡版', social: '📱 社媒版' };
-            const hints = { restrained: '深度书评 · 纯文字', balanced: '有节奏 · 无 emoji', social: '快节奏 · 小红书风' };
-            const sel = currentStyle === s ? ' selected' : '';
-            return `<button class="style-btn${sel}" data-style="${s}" title="${hints[s]}">${labels[s]}</button>`;
-          }).join('')}
-        </div>
-        <div class="style-hint" id="style-hint" style="font-size:12px;color:var(--text-lighter);margin-top:6px;"></div>
-      </div>
       <button class="btn btn-primary btn-block" id="btn-generate-draft" style="margin-top:16px;">下一步：生成推文初稿</button>
       <button class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="showDeepReport()">返回修改标题</button>
     </div>`;
-  // 初始化风格选择器
-  const styleBtnHandler = (e) => {
-    const btn = e.target.closest('.style-btn');
-    if (!btn) return;
-    $$('.style-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    saveStylePreference(btn.dataset.style);
-    updateStyleHint();
-  };
-  $('#style-selector').onclick = styleBtnHandler;
-  updateStyleHint();
   $('#btn-generate-draft').onclick = () => {
     const custom = $('#custom-title').value.trim();
     const selected = custom || document.querySelector('input[name="title"]:checked')?.value;
@@ -882,14 +865,15 @@ ${session.deepReport}
 写作角度引导：
 ${angleGuide}
 
-风格指南：
-${getDraftHint()}
+基调要求（初稿阶段不预设具体风格，只要求真诚、可读、有细节）：
+- 用具体细节和名场面引用说话，少空泛形容词
+- 段落 1-3 句短段落为主，手机端阅读友好
+- 标题党但真诚，不要夸张到失实
+- 文案口语化，像真人推书
 
 要求：
 - 全文控制在 1500 字左右（含信息卡），不要写超长文
 - 每章 1-3 段短段落，不要复述大量剧情，只保留最能支撑标题角度的 1-2 个细节/名场面
-- 标题党但真诚，不要夸张到失实
-- 文案口语化，真诚推荐
 - 不要在文中出现文件编码或乱码`;
 
   try {
@@ -902,6 +886,8 @@ ${getDraftHint()}
     md = md.replace(/^##\s+/gm, '### ');
     session.draftMd = md;
     session.finalMd = md;
+    session.versions = {};      // 三种去 AI 味版本，点一个生成一个
+    session.activeVersion = ''; // 当前选中的版本 key
     session.step = 3;
     saveSession();
     showRevise();
@@ -918,9 +904,60 @@ ${getDraftHint()}
 }
 
 /* ─── Revise / Manual edit ─── */
+function getVersionLabel(key) {
+  const map = { restrained: '克制版', balanced: '平衡版', social: '社媒版' };
+  return map[key] || key;
+}
+
+function getCurrentReviseMd() {
+  const active = session.activeVersion || '';
+  if (active && session.versions?.[active]) return session.versions[active];
+  return session.finalMd || session.draftMd || '';
+}
+
+function saveCurrentEditorValue() {
+  const editor = $('#md-editor');
+  if (!editor) return;
+  const md = editor.value;
+  const active = session.activeVersion || '';
+  if (active) {
+    if (!session.versions) session.versions = {};
+    session.versions[active] = md;
+  }
+  session.finalMd = md;
+}
+
 function showRevise() {
   session.previewMode = false;
   const title = session.selectedTitle || (session.book?.title || '推文标题');
+  const versions = session.versions || {};
+  const active = session.activeVersion || '';
+  const currentMd = getCurrentReviseMd();
+
+  const versionTabs = [
+    { key: '', label: '初稿' },
+    { key: 'restrained', label: '📖 克制版' },
+    { key: 'balanced', label: '⚖️ 平衡版' },
+    { key: 'social', label: '📱 社媒版' },
+  ];
+
+  // 根据当前激活版本生成操作按钮
+  let actionButtons = '';
+  if (active === '') {
+    actionButtons = `
+      <div class="version-actions">
+        <button class="btn btn-accent btn-generate-version" data-style="restrained" type="button">生成克制版</button>
+        <button class="btn btn-accent btn-generate-version" data-style="balanced" type="button">生成平衡版</button>
+        <button class="btn btn-accent btn-generate-version" data-style="social" type="button">生成社媒版</button>
+      </div>`;
+  } else {
+    const has = !!versions[active];
+    actionButtons = `
+      <div class="version-actions">
+        <button class="btn btn-accent btn-generate-version" data-style="${active}" type="button">${has ? '重新生成' : '生成'}${getVersionLabel(active)}</button>
+      </div>`;
+  }
+
   $('#main').innerHTML = `
     <div class="screen" style="padding-bottom:40px;">
       <div class="book-info-bar">
@@ -933,36 +970,43 @@ function showRevise() {
         <div class="title-value">${escapeHtml(title)}</div>
         <button class="btn btn-ghost btn-block" id="btn-copy-title-revise" style="margin-top:8px;">复制标题</button>
       </div>
-      <div class="chat-bubble ai">这是初稿。你可以直接编辑 Markdown，也可以让 AI 帮你改。点击下方切换可预览渲染效果。</div>
+      <div class="chat-bubble ai">这是初稿。点击下方版本按钮，AI 会在后端按该风格去 AI 味；你可以直接编辑任一版本，再定稿。</div>
+      <div class="version-tabs" id="version-tabs">
+        ${versionTabs.map(v => {
+          const has = v.key === '' ? true : !!versions[v.key];
+          const cls = active === v.key ? 'active' : '';
+          const badge = v.key && has ? ' ✓' : '';
+          return `<button class="version-tab ${cls}" data-version="${v.key}" type="button">${v.label}${badge}</button>`;
+        }).join('')}
+      </div>
       <div class="editor-tabs">
         <button class="editor-tab active" id="tab-edit" type="button">编辑</button>
         <button class="editor-tab" id="tab-preview" type="button">预览</button>
       </div>
       <div id="editor-area">
-        <textarea class="editor-textarea" id="md-editor">${escapeHtml(session.finalMd || session.draftMd)}</textarea>
+        <textarea class="editor-textarea" id="md-editor">${escapeHtml(currentMd)}</textarea>
       </div>
+      ${actionButtons}
       <div class="setting-group">
         <div class="setting-label">告诉 AI 怎么改（可选）</div>
         <input type="text" id="revise-input" placeholder="例如：第二段太啰嗦，第三段加一段名场面">
       </div>
       <button class="btn btn-primary btn-block" id="btn-ai-revise" style="margin-bottom:10px;">让 AI 按上面意见改</button>
-      <button class="btn btn-accent btn-block" id="btn-ai-polish" style="margin-bottom:10px;">✨ AI 审校润色（去 AI 味 + 风格调整）</button>
       <button class="btn btn-pink btn-block" id="btn-finalize" style="margin-bottom:10px;">定稿并查看成品</button>
       <button class="btn btn-ghost btn-block" onclick="showTitleSelector()">返回改标题</button>
     </div>`;
+
   $('#btn-copy-title-revise').onclick = () => copyText(title);
   $('#btn-ai-revise').onclick = aiRevise;
-  $('#btn-ai-polish').onclick = aiPolish;
   $('#btn-finalize').onclick = () => {
-    const md = $('#md-editor') ? $('#md-editor').value : session.finalMd;
-    session.finalMd = md;
+    saveCurrentEditorValue();
     session.step = 4;
     saveSession();
     // 定稿：保存到历史并自动下载 Markdown
-    const title = session.selectedTitle || session.book?.title || '推文';
+    const finalTitle = session.selectedTitle || session.book?.title || '推文';
     const entry = {
       id: Date.now().toString(36),
-      title: title,
+      title: finalTitle,
       verdict: session.verdict,
       markdown: session.finalMd,
       html: renderMagazineHTML(session.finalMd, session.selectedTitle),
@@ -970,11 +1014,28 @@ function showRevise() {
       createdAt: new Date().toISOString(),
     };
     saveHistory(entry);
-    downloadMarkdown(session.finalMd, title);
+    downloadMarkdown(session.finalMd, finalTitle);
+    showFinal();
     clearSession();
     updateHistoryBadge();
-    showFinal();
   };
+
+  // 版本切换
+  $$('.version-tab').forEach(tab => {
+    tab.onclick = () => {
+      saveCurrentEditorValue();
+      session.activeVersion = tab.dataset.version;
+      session.finalMd = getCurrentReviseMd();
+      saveSession();
+      showRevise();
+    };
+  });
+
+  // 生成版本
+  $$('.btn-generate-version').forEach(btn => {
+    btn.onclick = () => generateVersion(btn.dataset.style);
+  });
+
   $('#tab-edit').onclick = () => switchEditorTab(false);
   $('#tab-preview').onclick = () => switchEditorTab(true);
 }
@@ -987,7 +1048,7 @@ function switchEditorTab(preview) {
     const md = $('#md-editor').value;
     area.innerHTML = `<div class="editor-preview">${renderMarkdown(md)}</div>`;
   } else {
-    area.innerHTML = `<textarea class="editor-textarea" id="md-editor">${escapeHtml(session.finalMd || session.draftMd || '')}</textarea>`;
+    area.innerHTML = `<textarea class="editor-textarea" id="md-editor">${escapeHtml(getCurrentReviseMd())}</textarea>`;
   }
 }
 
@@ -1030,8 +1091,14 @@ ${current}`;
     const progEl = $('#revise-progress');
     if (progEl) progEl.remove();
     let revised = res.replace(/^#\s*.+\n+/m, '');
+    const active = session.activeVersion || '';
+    if (active) {
+      if (!session.versions) session.versions = {};
+      session.versions[active] = revised;
+    } else {
+      session.draftMd = revised;
+    }
     session.finalMd = revised;
-    session.draftMd = revised;
     saveSession();
     if (session.previewMode) {
       switchEditorTab(true);
@@ -1051,65 +1118,69 @@ ${current}`;
   }
 }
 
-/* ─── AI 审校润色（第二步：去 AI 味 + 风格调整） ─── */
-async function aiPolish() {
-  const current = $('#md-editor') ? $('#md-editor').value : session.finalMd;
-  if (!current) { toast('没有可审校的内容'); return; }
-  const startTime = Date.now();
-  $('#btn-ai-polish').textContent = '审校中...';
-  $('#btn-ai-polish').disabled = true;
+/* ─── 后端生成去 AI 味版本（克制/平衡/社媒）─── */
+async function generateVersion(style) {
+  const source = session.draftMd || session.finalMd;
+  if (!source) { toast('没有可润色的初稿'); return; }
 
-  // 进度条
-  const polishArea = $('#btn-ai-polish').parentNode;
-  const progEl = document.createElement('div');
-  progEl.id = 'polish-progress';
-  progEl.innerHTML = `
-    <div class="progress-bar-wrapper" style="padding:8px 0;">
-      <div class="progress-bar"><div class="progress-bar-slider"></div></div>
-    </div>
-    <p id="polish-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
-  `;
-  polishArea.insertBefore(progEl, $('#btn-ai-polish'));
+  const startTime = Date.now();
+  const btn = $(`.btn-generate-version[data-style="${style}"]`);
+  if (btn) { btn.textContent = '生成中...'; btn.disabled = true; }
+
+  // 在按钮区插入进度条
+  const actions = $('#version-actions');
+  let progEl = null;
+  if (actions) {
+    progEl = document.createElement('div');
+    progEl.id = 'version-progress';
+    progEl.innerHTML = `
+      <div class="progress-bar-wrapper" style="padding:8px 0;">
+        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
+      </div>
+      <p id="version-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
+    `;
+    actions.appendChild(progEl);
+  }
 
   const timerInterval = setInterval(() => {
-    const el = $('#polish-elapsed-text');
+    const el = $('#version-elapsed-text');
     if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
   }, 1000);
 
+  // 临时设置 currentStyle，让 getPolishPrompt 输出对应风格规则
+  const prevStyle = currentStyle;
+  currentStyle = style;
   const prompt = `${getPolishPrompt()}
 
 现在请对以下推书文初稿进行去 AI 味润色。记住：你是编辑，不是作者。只改需要改的地方，保留原文的结构、信息和已经很好的段落。
 
 初稿如下：
-${current}`;
+${source}`;
 
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
     clearInterval(timerInterval);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-    // 移除进度条
-    const progEl = $('#polish-progress');
     if (progEl) progEl.remove();
+
     let polished = res.replace(/^#\s*.+\n+/m, '');
     polished = polished.replace(/^##\s+/gm, '### ');
+
+    if (!session.versions) session.versions = {};
+    session.versions[style] = polished;
+    session.activeVersion = style;
     session.finalMd = polished;
-    session.draftMd = polished;
     saveSession();
-    if (session.previewMode) {
-      switchEditorTab(true);
-    } else {
-      $('#md-editor').value = polished;
-    }
-    $('#btn-ai-polish').textContent = '✨ AI 审校润色（去 AI 味 + 风格调整）';
-    $('#btn-ai-polish').disabled = false;
-    toast(`审校完成 · 耗时 ${elapsed} 秒`);
+    showRevise();
+    toast(`${getVersionLabel(style)}已生成 · 耗时 ${elapsed} 秒`);
   } catch (e) {
     clearInterval(timerInterval);
-    const progEl = $('#polish-progress');
     if (progEl) progEl.remove();
-    $('#btn-ai-polish').textContent = '✨ AI 审校润色（去 AI 味 + 风格调整）';
-    $('#btn-ai-polish').disabled = false;
-    alert('审校失败：' + e.message);
+    const existed = !!(session.versions && session.versions[style]);
+    if (btn) { btn.textContent = existed ? `重新生成${getVersionLabel(style)}` : `生成${getVersionLabel(style)}`; btn.disabled = false; }
+    alert('生成失败：' + e.message);
+  } finally {
+    currentStyle = prevStyle;
   }
 }
 
