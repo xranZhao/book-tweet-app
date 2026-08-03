@@ -1003,7 +1003,6 @@ function showRevise() {
       title: finalTitle,
       verdict: session.verdict,
       markdown: session.finalMd,
-      html: renderMagazineHTML(session.finalMd, session.selectedTitle),
       bookTitle: session.book?.title || '',
       createdAt: new Date().toISOString(),
     };
@@ -1528,7 +1527,7 @@ function showHistoryDetail(h) {
         <div class="title-value">${escapeHtml(h.title)}</div>
         <button class="btn btn-ghost btn-block" id="btn-copy-title-hist" style="margin-top:8px;">复制标题</button>
       </div>
-      <div class="preview-wrap" id="preview-box-hist">${h.html}</div>
+      <div class="report-card">${renderMarkdown(h.markdown)}</div>
       <button class="btn btn-accent btn-block" id="btn-download-md-hist" style="margin-bottom:10px;">📥 下载 Markdown</button>
       <button class="btn btn-ghost btn-block" id="btn-reload-hist" style="margin-bottom:10px;">📝 回到阅读重新编辑</button>
       <button class="btn btn-danger btn-block" id="btn-delete-hist">🗑 删除此条</button>
