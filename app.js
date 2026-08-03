@@ -971,7 +971,7 @@ function showRevise() {
         <div class="title-value">${escapeHtml(title)}</div>
         <button class="btn btn-ghost btn-block" id="btn-copy-title-revise" style="margin-top:8px;">复制标题</button>
       </div>
-      <div class="chat-bubble ai">这是初稿。点击下方版本按钮，AI 会在后端按该风格去 AI 味；你可以直接编辑任一版本，再定稿。</div>
+      <div class="chat-bubble ai">这是初稿。点击下方版本按钮可生成去 AI 味版本；你可以直接编辑任一版本，满意后点「完成并下载」。</div>
       <div class="version-tabs" id="version-tabs">
         ${versionTabs.map(v => {
           const has = v.key === '' ? true : !!versions[v.key];
@@ -988,22 +988,15 @@ function showRevise() {
         <textarea class="editor-textarea" id="md-editor">${escapeHtml(currentMd)}</textarea>
       </div>
       ${actionButtons}
-      <div class="setting-group">
-        <div class="setting-label">告诉 AI 怎么改（可选）</div>
-        <input type="text" id="revise-input" placeholder="例如：第二段太啰嗦，第三段加一段名场面">
-      </div>
-      <button class="btn btn-primary btn-block" id="btn-ai-revise" style="margin-bottom:10px;">让 AI 按上面意见改</button>
-      <button class="btn btn-pink btn-block" id="btn-finalize" style="margin-bottom:10px;">定稿并查看成品</button>
+      <button class="btn btn-pink btn-block" id="btn-finalize" style="margin-bottom:10px;">✅ 完成并下载</button>
       <button class="btn btn-ghost btn-block" onclick="showTitleSelector()">返回改标题</button>
     </div>`;
 
   $('#btn-copy-title-revise').onclick = () => copyText(title);
-  $('#btn-ai-revise').onclick = aiRevise;
   $('#btn-finalize').onclick = () => {
     saveCurrentEditorValue();
     session.step = 4;
     saveSession();
-    // 定稿：保存到历史并自动下载 Markdown
     const finalTitle = session.selectedTitle || session.book?.title || '推文';
     const entry = {
       id: Date.now().toString(36),
@@ -1016,9 +1009,10 @@ function showRevise() {
     };
     saveHistory(entry);
     downloadMarkdown(session.finalMd, finalTitle);
-    showFinal();
     clearSession();
     updateHistoryBadge();
+    toast('已下载并保存到历史');
+    navTo('upload');
   };
 
   // 版本切换
@@ -1050,72 +1044,6 @@ function switchEditorTab(preview) {
     area.innerHTML = `<div class="editor-preview">${renderMarkdown(md)}</div>`;
   } else {
     area.innerHTML = `<textarea class="editor-textarea" id="md-editor">${escapeHtml(getCurrentReviseMd())}</textarea>`;
-  }
-}
-
-async function aiRevise() {
-  const instruction = $('#revise-input').value.trim();
-  if (!instruction) { toast('请先写修改意见'); return; }
-  const current = $('#md-editor') ? $('#md-editor').value : session.finalMd;
-  const startTime = Date.now();
-  $('#btn-ai-revise').textContent = '修改中...';
-  $('#btn-ai-revise').disabled = true;
-
-  // 在输入框下方插入进度条
-  const reviseArea = $('#revise-input').parentNode;
-  const progEl = document.createElement('div');
-  progEl.id = 'revise-progress';
-  progEl.innerHTML = `
-    <div class="progress-bar-wrapper" style="padding:8px 0;">
-      <div class="progress-bar"><div class="progress-bar-slider"></div></div>
-    </div>
-    <p id="revise-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
-  `;
-  reviseArea.appendChild(progEl);
-
-  const timerInterval = setInterval(() => {
-    const el = $('#revise-elapsed-text');
-    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
-  }, 1000);
-
-  const prompt = `请根据以下要求修改推文初稿。只返回修改后的完整 Markdown，不要解释。
-
-要求：${instruction}
-
-当前初稿：
-${current}`;
-  try {
-    const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
-    clearInterval(timerInterval);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-    // 移除进度条
-    const progEl = $('#revise-progress');
-    if (progEl) progEl.remove();
-    let revised = res.replace(/^#\s*.+\n+/m, '');
-    const active = session.activeVersion || '';
-    if (active) {
-      if (!session.versions) session.versions = {};
-      session.versions[active] = revised;
-    } else {
-      session.draftMd = revised;
-    }
-    session.finalMd = revised;
-    saveSession();
-    if (session.previewMode) {
-      switchEditorTab(true);
-    } else {
-      $('#md-editor').value = revised;
-    }
-    $('#btn-ai-revise').textContent = '让 AI 按上面意见改';
-    $('#btn-ai-revise').disabled = false;
-    toast(`已修改 · 耗时 ${elapsed} 秒`);
-  } catch (e) {
-    clearInterval(timerInterval);
-    const progEl = $('#revise-progress');
-    if (progEl) progEl.remove();
-    $('#btn-ai-revise').textContent = '让 AI 按上面意见改';
-    $('#btn-ai-revise').disabled = false;
-    alert('修改失败：' + e.message);
   }
 }
 
@@ -1234,23 +1162,6 @@ function copyText(text) {
     document.execCommand('copy'); document.body.removeChild(ta);
     toast('标题已复制');
   }
-}
-
-function copyHtml(el) {
-  const done = () => toast('已复制，去订阅号助手粘贴');
-  if (navigator.clipboard && window.ClipboardItem) {
-    const html = el.innerHTML;
-    const item = new ClipboardItem({
-      'text/html': new Blob([html], { type: 'text/html' }),
-      'text/plain': new Blob([el.innerText], { type: 'text/plain' })
-    });
-    navigator.clipboard.write([item]).then(done).catch(() => legacyCopy(el, done));
-  } else legacyCopy(el, done);
-}
-function legacyCopy(el, done) {
-  const range = document.createRange(); range.selectNodeContents(el);
-  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-  document.execCommand('copy'); sel.removeAllRanges(); done();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1564,8 +1475,7 @@ function renderHistory() {
   }
   const actionsHtml = history.length ? `
     <div class="history-actions">
-      <button class="btn btn-primary btn-sm" id="btn-export-all">📦 导出全部 HTML</button>
-      <button class="btn btn-ghost btn-sm" id="btn-export-json">📋 导出备份 JSON</button>
+      <button class="btn btn-primary btn-sm" id="btn-export-all-md">📦 导出全部 Markdown</button>
     </div>` : '';
   $('#main').innerHTML = `
     <div class="screen">
@@ -1600,10 +1510,8 @@ function renderHistory() {
     };
   });
   // 导出全部
-  const btnExport = $('#btn-export-all');
-  if (btnExport) btnExport.onclick = exportAllHTML;
-  const btnJson = $('#btn-export-json');
-  if (btnJson) btnJson.onclick = exportAllJSON;
+  const btnExportMd = $('#btn-export-all-md');
+  if (btnExportMd) btnExportMd.onclick = exportAllMarkdown;
 }
 
 function showHistoryDetail(h) {
@@ -1621,12 +1529,10 @@ function showHistoryDetail(h) {
         <button class="btn btn-ghost btn-block" id="btn-copy-title-hist" style="margin-top:8px;">复制标题</button>
       </div>
       <div class="preview-wrap" id="preview-box-hist">${h.html}</div>
-      <button class="btn btn-primary btn-block" id="btn-copy-html-hist" style="margin-bottom:10px;">📋 一键复制全文</button>
       <button class="btn btn-accent btn-block" id="btn-download-md-hist" style="margin-bottom:10px;">📥 下载 Markdown</button>
       <button class="btn btn-ghost btn-block" id="btn-reload-hist" style="margin-bottom:10px;">📝 回到阅读重新编辑</button>
       <button class="btn btn-danger btn-block" id="btn-delete-hist">🗑 删除此条</button>
     </div>`;
-  $('#btn-copy-html-hist').onclick = () => copyHtml($('#preview-box-hist'));
   $('#btn-download-md-hist').onclick = () => downloadMarkdown(h.markdown, h.title);
   $('#btn-copy-title-hist').onclick = () => copyText(h.title);
   $('#btn-reload-hist').onclick = () => {
@@ -1676,28 +1582,19 @@ function updateHistoryBadge() {
   }
 }
 
-async function exportAllHTML() {
+async function exportAllMarkdown() {
   const history = getHistory();
   if (!history.length) { toast('没有可导出的文章'); return; }
   const zip = new JSZip();
   history.forEach((h, i) => {
-    const filename = `推文_${(i + 1).toString().padStart(2, '0')}_${h.title.replace(/[\/:*?"<>|]/g, '_')}.html`;
-    const fullHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${escapeHtml(h.title)}</title></head><body style="background:#ededed;">${h.html}</body></html>`;
-    zip.file(filename, fullHtml);
+    const filename = `推文_${(i + 1).toString().padStart(2, '0')}_${h.title.replace(/[\/:*?"<>|]/g, '_')}.md`;
+    zip.file(filename, h.markdown || '');
   });
   // 同时加入备份 JSON
   zip.file('推文数据备份.json', JSON.stringify(history, null, 2));
   const blob = await zip.generateAsync({ type: 'blob' });
   downloadBlob(blob, `推文导出_${new Date().toISOString().slice(0, 10)}.zip`);
   toast('导出完成，请查看下载');
-}
-
-async function exportAllJSON() {
-  const history = getHistory();
-  if (!history.length) { toast('没有可导出的数据'); return; }
-  const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
-  downloadBlob(blob, `推文备份_${new Date().toISOString().slice(0, 10)}.json`);
-  toast('备份完成');
 }
 
 function downloadBlob(blob, filename) {
