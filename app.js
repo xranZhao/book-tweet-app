@@ -958,6 +958,21 @@ function showRevise() {
     session.finalMd = md;
     session.step = 4;
     saveSession();
+    // 定稿：保存到历史并自动下载 Markdown
+    const title = session.selectedTitle || session.book?.title || '推文';
+    const entry = {
+      id: Date.now().toString(36),
+      title: title,
+      verdict: session.verdict,
+      markdown: session.finalMd,
+      html: renderMagazineHTML(session.finalMd, session.selectedTitle),
+      bookTitle: session.book?.title || '',
+      createdAt: new Date().toISOString(),
+    };
+    saveHistory(entry);
+    downloadMarkdown(session.finalMd, title);
+    clearSession();
+    updateHistoryBadge();
     showFinal();
   };
   $('#tab-edit').onclick = () => switchEditorTab(false);
@@ -1129,28 +1144,13 @@ function showFinal() {
       </div>
       <div class="preview-wrap" id="preview-box">${html}</div>
       <button class="btn btn-primary btn-block" id="btn-copy-html" style="margin-bottom:10px;">📋 一键复制全文（去订阅号助手粘贴）</button>
-      <button class="btn btn-pink btn-block" id="btn-save-history" style="margin-bottom:10px;">💾 保存到历史</button>
+      <button class="btn btn-accent btn-block" id="btn-download-md" style="margin-bottom:10px;">📥 下载 Markdown</button>
       <button class="btn btn-ghost btn-block" id="btn-back-edit">返回修改文字</button>
     </div>`;
   $('#btn-copy-html').onclick = () => copyHtml($('#preview-box'));
+  $('#btn-download-md').onclick = () => downloadMarkdown(session.finalMd, session.selectedTitle || session.book?.title || '推文');
   $('#btn-copy-title-final').onclick = () => copyText(title);
   $('#btn-back-edit').onclick = () => { navTo('reading'); showRevise(); };
-  $('#btn-save-history').onclick = () => {
-    const entry = {
-      id: Date.now().toString(36),
-      title: title,
-      verdict: session.verdict,
-      markdown: session.finalMd,
-      html: renderMagazineHTML(session.finalMd, session.selectedTitle),
-      bookTitle: session.book?.title || '',
-      createdAt: new Date().toISOString(),
-    };
-    saveHistory(entry);
-    clearSession();
-    toast('已存入历史');
-    updateHistoryBadge();
-    navTo('history');
-  };
 }
 
 function copyText(text) {
@@ -1550,10 +1550,12 @@ function showHistoryDetail(h) {
       </div>
       <div class="preview-wrap" id="preview-box-hist">${h.html}</div>
       <button class="btn btn-primary btn-block" id="btn-copy-html-hist" style="margin-bottom:10px;">📋 一键复制全文</button>
+      <button class="btn btn-accent btn-block" id="btn-download-md-hist" style="margin-bottom:10px;">📥 下载 Markdown</button>
       <button class="btn btn-ghost btn-block" id="btn-reload-hist" style="margin-bottom:10px;">📝 回到阅读重新编辑</button>
       <button class="btn btn-danger btn-block" id="btn-delete-hist">🗑 删除此条</button>
     </div>`;
   $('#btn-copy-html-hist').onclick = () => copyHtml($('#preview-box-hist'));
+  $('#btn-download-md-hist').onclick = () => downloadMarkdown(h.markdown, h.title);
   $('#btn-copy-title-hist').onclick = () => copyText(h.title);
   $('#btn-reload-hist').onclick = () => {
     // 恢复到 session 中重新编辑
@@ -1633,6 +1635,13 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function downloadMarkdown(md, title) {
+  const safeTitle = String(title).replace(/[\\/:*?"\x3c\x3e|]/g, '_').trim() || '推文';
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  downloadBlob(blob, `${safeTitle}.md`);
+  toast('Markdown 已下载');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
