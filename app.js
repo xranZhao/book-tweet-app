@@ -151,6 +151,21 @@ function inlineMd(text) {
     .replace(/\*(.+?)\*/g, '<em style="color:var(--text-light);">$1</em>');
 }
 
+function extractMdMeta(md) {
+  const clean = String(md || '').replace(/\*\*(.+?)\*\*/g, '$1');
+  const workTitle = (clean.match(/原作\s*[:：]\s*(.+)/)?.[1] || '').replace(/[《》]/g, '').trim();
+  const cp = (clean.match(/CP\s*[:：]\s*(.+)/)?.[1] || '').replace(/<\/?[^>]+>/g, '').trim();
+  return { workTitle, cp };
+}
+
+function buildExportMdName(md, articleTitle) {
+  const now = new Date();
+  const dateStr = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const { workTitle, cp } = extractMdMeta(md);
+  const parts = [dateStr, workTitle, cp, articleTitle || ''].map(p => String(p || '').trim().replace(/[\\/:*?"<>|]/g, '_')).filter(Boolean);
+  return (parts.join('_') || '推文') + '.md';
+}
+
 function deepSeekChat(model, content, maxTokens = 4000, timeoutMs = 120000) {
   if (!CONFIG.API_KEY) { return Promise.reject(new Error('请先设置 API Key')); }
   const MAX_RETRIES = 3;
@@ -1395,15 +1410,15 @@ function renderMagazineHTML(md, overrideTitle) {
   // 章节解析（00 链接 + 01~05 正文）
   const sections = parseSections(md);
   const labelMap = {
-    '小说在哪看':       { num: '00', en: 'GUIDE · 阅读入口' },
-    '文案推荐':         { num: '01', en: 'SYNOPSIS · 沦陷的开端' },
-    'Fanst 碎碎念':     { num: '02', en: 'THOUGHTS · 黑咖啡般的回味' },
-    '名场面预警':       { num: '03', en: 'HIGHLIGHT · 带着刺的温柔' },
-    '最戳我的一个细节': { num: '04', en: 'DETAIL · 一块旧浴巾的尊重' },
-    '综合评价':         { num: '///', en: 'VERDICT · 压得住阵脚的存在' },
-    '避雷点':           { num: '01', en: 'WARNING · 先睹为快' },
-    '踩雷预警':         { num: '03', en: 'CAUTION · 谨慎阅读' },
-    '最戳我的一个槽点': { num: '04', en: 'FLAW · 瑕不掩瑜' },
+    '小说在哪看':       { num: '00', en: 'GUIDE' },
+    '文案推荐':         { num: '01', en: 'SYNOPSIS' },
+    'Fanst 碎碎念':     { num: '02', en: 'THOUGHTS' },
+    '名场面预警':       { num: '03', en: 'HIGHLIGHT' },
+    '最戳我的一个细节': { num: '04', en: 'DETAIL' },
+    '综合评价':         { num: '///', en: 'VERDICT' },
+    '避雷点':           { num: '01', en: 'WARNING' },
+    '踩雷预警':         { num: '03', en: 'CAUTION' },
+    '最戳我的一个槽点': { num: '04', en: 'FLAW' },
   };
 
   // 构建章节 HTML
@@ -1680,8 +1695,8 @@ async function exportAllMarkdown() {
   const history = getHistory();
   if (!history.length) { toast('没有可导出的文章'); return; }
   const zip = new JSZip();
-  history.forEach((h, i) => {
-    const filename = `推文_${(i + 1).toString().padStart(2, '0')}_${h.title.replace(/[\/:*?"<>|]/g, '_')}.md`;
+  history.forEach((h) => {
+    const filename = buildExportMdName(h.markdown, h.title);
     zip.file(filename, h.markdown || '');
   });
   // 同时加入备份 JSON
@@ -1701,9 +1716,9 @@ function downloadBlob(blob, filename) {
 }
 
 function downloadMarkdown(md, title) {
-  const safeTitle = String(title).replace(/[\\/:*?"\x3c\x3e|]/g, '_').trim() || '推文';
+  const filename = buildExportMdName(md, title);
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-  downloadBlob(blob, `${safeTitle}.md`);
+  downloadBlob(blob, filename);
   toast('Markdown 已下载');
 }
 
