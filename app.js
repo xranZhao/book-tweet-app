@@ -753,14 +753,30 @@ async function generateTitleOptions() {
   const prompt = `根据以下深度阅读报告，为这篇小说的公众号推文生成 5 个标题候选。
 
 要求：
-- 每个标题贴合剧情、有吸引力、适合 1500 字公众号推文
-- 不要夸张到失实，不要剧透核心反转
-- 标题党但真诚，能勾起读者点击兴趣
+- 每个标题必须从一个具体钩子出发，禁止空泛推荐。可用钩子类型（每个标题至少用一类）：
+  1. 场景钩子：把小说里最具体、最有画面感的一个动作/场景塞进标题
+  2. 冲突钩子：核心矛盾、身份反差、关系张力
+  3. 情绪钩子：一个能引发好奇或轻微痛感的判断句
+  4. 反常识钩子：打破常规认知的设定或情节
+  5. 对话钩子：一句有张力、能暗示关系的台词
+- 标题党但真诚，不剧透核心反转，不夸张到失实。
 - 判定调性为「${session.verdict}」：
   - 强推/可推：突出精彩看点、张力、名场面氛围
   - 避雷可写：可带「避雷」「测评」「先别嗑」等警示感
-- 只输出 5 行标题，每行前面加编号 1-5，不要多余解释
-- 每个标题（含标点符号）控制在 20 字左右，不超过 25 字
+- 只输出 5 行标题，每行前面加编号 1-5，不要多余解释。
+- 每个标题（含标点符号）控制在 18–25 字。
+
+绝对禁止的标题：
+❌ 《这篇小说真的很好看》
+❌ 《推荐一篇值得熬夜看完的文》
+❌ 《看完这篇我哭惨了》
+❌ 《XX 和 YY 的爱情故事》
+
+好标题示例：
+✅ 《他把申请表递过去时，手指没敢碰她一下》
+✅ 《哥哥从厄里斯魔镜里走出来，第一句话是叫她滚》
+✅ 《先婚后爱？不，是结婚证还没捂热就想逃婚》
+✅ 《这个 Malfoy，把浴袍递过去时都没回头》
 
 深度报告：
 ${session.deepReport}`;
@@ -820,6 +836,29 @@ function showTitleSelector() {
     saveSession();
     generateDraft();
   };
+}
+
+function normalizeNovelWhereabouts(md) {
+  const guideLines = `📖【小说在哪看】请看这篇：小说阅读途径 →
+📚【已推小说合集】请看这篇：已推小说合集 →`;
+  let out = md;
+  // 统一标题写法
+  out = out.replace(/###\s*00\s*小说哪里看/g, '### 00 小说在哪看');
+  // 如果存在 00 章节，替换其正文为固定两行
+  const chapterRe = /(### 00 小说在哪看)[^\n]*\n([\s\S]*?)(?=\n### |\n## |\n# |$)/;
+  if (chapterRe.test(out)) {
+    out = out.replace(chapterRe, `$1\n${guideLines}`);
+  } else {
+    // 在基本信息卡后插入
+    const infoCardRe = /(\*\*基本信息卡\*\*[\s\S]*?)(?=\n### |\n## |\n# |$)/;
+    if (infoCardRe.test(out)) {
+      out = out.replace(infoCardRe, `$1\n\n### 00 小说在哪看\n${guideLines}`);
+    } else {
+      // 兜底：在开头插入
+      out = `### 00 小说在哪看\n${guideLines}\n\n${out}`;
+    }
+  }
+  return out;
 }
 
 /* ─── Draft generation ─── */
@@ -908,6 +947,8 @@ ${angleGuide}
     let md = res.replace(/^#\s*.+\n+/m, '');
     // 强制 ### 格式
     md = md.replace(/^##\s+/gm, '### ');
+    // 强制 00 小说在哪看 结构
+    md = normalizeNovelWhereabouts(md);
     session.draftMd = md;
     session.finalMd = md;
     session.versions = {};      // 三种去 AI 味版本，点一个生成一个
@@ -1354,7 +1395,7 @@ function renderMagazineHTML(md, overrideTitle) {
   // 章节解析（00 链接 + 01~05 正文）
   const sections = parseSections(md);
   const labelMap = {
-    '小说哪里看':       { num: '00', en: 'GUIDE · 阅读入口' },
+    '小说在哪看':       { num: '00', en: 'GUIDE · 阅读入口' },
     '文案推荐':         { num: '01', en: 'SYNOPSIS · 沦陷的开端' },
     'Fanst 碎碎念':     { num: '02', en: 'THOUGHTS · 黑咖啡般的回味' },
     '名场面预警':       { num: '03', en: 'HIGHLIGHT · 带着刺的温柔' },
@@ -1506,17 +1547,17 @@ function renderHistory() {
         ${history.map(h => {
           const date = new Date(h.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
           const vc = h.verdict === '强推' || h.verdict === '可推' ? 'verdict-rec' : h.verdict === '避雷可写' ? 'verdict-push' : 'verdict-pass';
-          const icon = h.verdict === '强推' ? '⭐' : h.verdict === '可推' ? '✅' : h.verdict === '避雷可写' ? '⚠️' : '📝';
           return `
             <div class="history-item" data-id="${h.id}">
               <button class="h-delete" data-id="${h.id}" title="删除">🗑</button>
-              <span class="h-icon">${icon}</span>
               <div class="h-body">
-                <div class="h-title">${escapeHtml(h.title)}</div>
+                <div class="h-title-line">
+                  <span class="h-title">${escapeHtml(h.title)}</span>
+                  ${h.verdict ? `<span class="h-verdict ${vc}">${escapeHtml(h.verdict)}</span>` : ''}
+                </div>
                 <div class="h-meta">
                   <span>${date}</span>
-                  ${h.verdict ? `<span class="h-verdict ${vc}">${escapeHtml(h.verdict)}</span>` : ''}
-                  ${h.bookTitle ? `<span style="color:var(--text-lighter);">${escapeHtml(h.bookTitle)}</span>` : ''}
+                  ${h.bookTitle ? `<span class="h-book">${escapeHtml(h.bookTitle)}</span>` : ''}
                 </div>
               </div>
               <span class="h-arrow">→</span>
