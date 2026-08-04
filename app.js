@@ -103,16 +103,6 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function updateStyleHint() {
-  const hints = {
-    restrained: '深度书评 · 纯文字 · 句长均匀',
-    balanced: '有长短句节奏 · 无 emoji',
-    social: '快节奏 · 有 emoji · 小红书风',
-  };
-  const el = $('#style-hint');
-  if (el) el.textContent = '生成阶段轻量引导，审校阶段深度加工 · ' + (hints[currentStyle] || '');
-}
-
 function renderMarkdown(md) {
   const lines = md.split('\n');
   let html = '';
@@ -914,6 +904,12 @@ function normalizeNovelWhereabouts(md) {
   let out = md;
   // 统一标题写法
   out = out.replace(/###\s*00\s*小说哪里看/g, '### 00 小说在哪看');
+  // 删除所有可能分散在别处的导航链接行（包括带 emoji 和不带 emoji 的），稍后统一插入
+  out = out.replace(/^[ \t]*(?:📖|🎀)?\s*【小说在哪看】请看这篇：小说阅读途径 →\s*$/gm, '');
+  out = out.replace(/^[ \t]*(?:📚|🎀)?\s*【已推小说合集】请看这篇：已推小说合集 →\s*$/gm, '');
+  // 清理可能产生的多余空行
+  out = out.replace(/\n{3,}/g, '\n\n');
+
   // 如果存在 00 章节，替换其正文为固定两行
   const chapterRe = /(### 00 小说在哪看)[^\n]*\n([\s\S]*?)(?=\n### |\n## |\n# |$)/;
   if (chapterRe.test(out)) {
@@ -973,12 +969,13 @@ async function generateDraft() {
 - **CP**：[主要人物关系]
 - **标签**：[自由生成 3-6 个贴合的标签]
 
+注意：基本信息卡后面**不要**跟任何链接，链接只放在 ">= 00 小说在哪看" 章节内。
+
 你必须按顺序输出以下 6 个章节，不可省略任何一个、不可更改章节标题文字：
 
-### 00 小说哪里看
-（这一章是固定的读者导航，不要自由发挥。**必须**原样输出下面两行，一字不改：）
-【小说在哪看】请看这篇：小说阅读途径 →
-【已推小说合集】请看这篇：已推小说合集 →
+### 00 小说在哪看
+📖【小说在哪看】请看这篇：小说阅读途径 →
+📚【已推小说合集】请看这篇：已推小说合集 →
 
 ### ${isAvoid ? '01 避雷点' : '01 文案推荐'}
 ### 02 Fanst 碎碎念
@@ -997,17 +994,21 @@ ${session.deepReport}
 写作角度引导：
 ${angleGuide}
 
-基调要求（初稿阶段不预设具体风格，只要求真诚、可读、有细节）：
+基调与去 AI 味要求：
+- 长短句交替：2-3 句短句（5-12字）制造节奏，接 1 句中等句（15-25字）给信息
+- 全文控制在 800-1000 字（含信息卡），不要超长文
+- 每章 1-3 段短段落，只保留最能支撑标题角度的 1-2 个细节/名场面
 - 用具体细节和名场面引用说话，少空泛形容词
-- 段落 1-3 句短段落为主，手机端阅读友好
 - 标题党但真诚，不要夸张到失实
 - 文案口语化，像真人推书
-- 名场面预警只聚焦 1 个最戳人的场面，用画面感和短句节奏把它写透，不要罗列多个场面
-
-要求：
-- 全文控制在 1500 字左右（含信息卡），不要写超长文
-- 每章 1-3 段短段落，不要复述大量剧情，只保留最能支撑标题角度的 1-2 个细节/名场面
+- 名场面预警只聚焦 1 个最戳人的场面，用画面感和短句节奏把它写透
+- 禁止："不是X，而是Y""与其说不如说""首先其次最后""由此可见""这意味着"
+- 禁止："我们有没有过这样的时刻""作为XX人都知道"
+- 禁止：啊啊啊啊、呜呜呜、谁懂啊、我真的会死、一整个破防、垂直入坑、姐妹们给我冲
+- 禁止同段内堆砌 2 个以上成语/四字词
+- 直接表达，不要总结性收束（如"不是结束，而是开始"类对仗句）
 - 不要在文中出现文件编码或乱码`;
+
 
   try {
     const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
@@ -1039,59 +1040,20 @@ ${angleGuide}
 }
 
 /* ─── Revise / Manual edit ─── */
-function getVersionLabel(key) {
-  const map = { restrained: '克制版', balanced: '平衡版', social: '社媒版' };
-  return map[key] || key;
-}
-
 function getCurrentReviseMd() {
-  const active = session.activeVersion || '';
-  if (active && session.versions?.[active]) return session.versions[active];
   return session.finalMd || session.draftMd || '';
 }
 
 function saveCurrentEditorValue() {
   const editor = $('#md-editor');
   if (!editor) return;
-  const md = editor.value;
-  const active = session.activeVersion || '';
-  if (active) {
-    if (!session.versions) session.versions = {};
-    session.versions[active] = md;
-  }
-  session.finalMd = md;
+  session.finalMd = editor.value;
 }
 
 function showRevise() {
   session.previewMode = false;
   const title = session.selectedTitle || (session.book?.title || '推文标题');
-  const versions = session.versions || {};
-  const active = session.activeVersion || '';
   const currentMd = getCurrentReviseMd();
-
-  const versionTabs = [
-    { key: '', label: '初稿' },
-    { key: 'restrained', label: '📖 克制版' },
-    { key: 'balanced', label: '⚖️ 平衡版' },
-    { key: 'social', label: '📱 社媒版' },
-  ];
-
-  // 根据当前激活版本生成操作按钮
-  let actionButtons = '';
-  if (active === '') {
-    actionButtons = `
-      <div class="version-actions">
-        <button class="btn btn-accent btn-generate-version" data-style="restrained" type="button">生成克制版</button>
-        <button class="btn btn-accent btn-generate-version" data-style="balanced" type="button">生成平衡版</button>
-        <button class="btn btn-accent btn-generate-version" data-style="social" type="button">生成社媒版</button>
-      </div>`;
-  } else {
-    const has = !!versions[active];
-    actionButtons = `
-      <div class="version-actions">
-        <button class="btn btn-accent btn-generate-version" data-style="${active}" type="button">${has ? '重新生成' : '生成'}${getVersionLabel(active)}</button>
-      </div>`;
-  }
 
   $('#main').innerHTML = `
     <div class="screen" style="padding-bottom:40px;">
@@ -1105,15 +1067,7 @@ function showRevise() {
         <div class="title-value">${escapeHtml(title)}</div>
         <button class="btn btn-ghost btn-block" id="btn-copy-title-revise" style="margin-top:8px;">复制标题</button>
       </div>
-      <div class="chat-bubble ai">这是初稿。点击下方版本按钮可生成去 AI 味版本；你可以直接编辑任一版本，满意后点「完成并下载」。</div>
-      <div class="version-tabs" id="version-tabs">
-        ${versionTabs.map(v => {
-          const has = v.key === '' ? true : !!versions[v.key];
-          const cls = active === v.key ? 'active' : '';
-          const badge = v.key && has ? ' ✓' : '';
-          return `<button class="version-tab ${cls}" data-version="${v.key}" type="button">${v.label}${badge}</button>`;
-        }).join('')}
-      </div>
+      <div class="chat-bubble ai">初稿已生成（已去 AI 味）。你可以直接编辑，满意后点「完成并下载」。</div>
       <div class="editor-tabs">
         <button class="editor-tab active" id="tab-edit" type="button">编辑</button>
         <button class="editor-tab" id="tab-preview" type="button">预览</button>
@@ -1121,7 +1075,6 @@ function showRevise() {
       <div id="editor-area">
         <textarea class="editor-textarea" id="md-editor">${escapeHtml(currentMd)}</textarea>
       </div>
-      ${actionButtons}
       <button class="btn btn-pink btn-block" id="btn-finalize" style="margin-bottom:10px;">✅ 完成并下载</button>
       <button class="btn btn-ghost btn-block" onclick="showTitleSelector()">返回改标题</button>
     </div>`;
@@ -1148,22 +1101,6 @@ function showRevise() {
     navTo('upload');
   };
 
-  // 版本切换
-  $$('.version-tab').forEach(tab => {
-    tab.onclick = () => {
-      saveCurrentEditorValue();
-      session.activeVersion = tab.dataset.version;
-      session.finalMd = getCurrentReviseMd();
-      saveSession();
-      showRevise();
-    };
-  });
-
-  // 生成版本
-  $$('.btn-generate-version').forEach(btn => {
-    btn.onclick = () => generateVersion(btn.dataset.style);
-  });
-
   $('#tab-edit').onclick = () => switchEditorTab(false);
   $('#tab-preview').onclick = () => switchEditorTab(true);
 }
@@ -1177,72 +1114,6 @@ function switchEditorTab(preview) {
     area.innerHTML = `<div class="editor-preview">${renderMarkdown(md)}</div>`;
   } else {
     area.innerHTML = `<textarea class="editor-textarea" id="md-editor">${escapeHtml(getCurrentReviseMd())}</textarea>`;
-  }
-}
-
-/* ─── 后端生成去 AI 味版本（克制/平衡/社媒）─── */
-async function generateVersion(style) {
-  const source = session.draftMd || session.finalMd;
-  if (!source) { toast('没有可润色的初稿'); return; }
-
-  const startTime = Date.now();
-  const btn = $(`.btn-generate-version[data-style="${style}"]`);
-  if (btn) { btn.textContent = '生成中...'; btn.disabled = true; }
-
-  // 在按钮区插入进度条
-  const actions = $('#version-actions');
-  let progEl = null;
-  if (actions) {
-    progEl = document.createElement('div');
-    progEl.id = 'version-progress';
-    progEl.innerHTML = `
-      <div class="progress-bar-wrapper" style="padding:8px 0;">
-        <div class="progress-bar"><div class="progress-bar-slider"></div></div>
-      </div>
-      <p id="version-elapsed-text" style="font-size:13px;color:var(--text-light);margin:0 0 8px;">⏱ 已等待 0 秒</p>
-    `;
-    actions.appendChild(progEl);
-  }
-
-  const timerInterval = setInterval(() => {
-    const el = $('#version-elapsed-text');
-    if (el) el.textContent = `⏱ 已等待 ${Math.floor((Date.now() - startTime) / 1000)} 秒`;
-  }, 1000);
-
-  // 临时设置 currentStyle，让 getPolishPrompt 输出对应风格规则
-  const prevStyle = currentStyle;
-  currentStyle = style;
-  const prompt = `${getPolishPrompt()}
-
-现在请对以下推书文初稿进行去 AI 味润色。记住：你是编辑，不是作者。只改需要改的地方，保留原文的结构、信息和已经很好的段落。
-
-初稿如下：
-${source}`;
-
-  try {
-    const res = await deepSeekChat(CONFIG.WRITE_MODEL, prompt, 6000, 180000);
-    clearInterval(timerInterval);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-    if (progEl) progEl.remove();
-
-    let polished = res.replace(/^#\s*.+\n+/m, '');
-    polished = polished.replace(/^##\s+/gm, '### ');
-
-    if (!session.versions) session.versions = {};
-    session.versions[style] = polished;
-    session.activeVersion = style;
-    session.finalMd = polished;
-    saveSession();
-    showRevise();
-    toast(`${getVersionLabel(style)}已生成 · 耗时 ${elapsed} 秒`);
-  } catch (e) {
-    clearInterval(timerInterval);
-    if (progEl) progEl.remove();
-    const existed = !!(session.versions && session.versions[style]);
-    if (btn) { btn.textContent = existed ? `重新生成${getVersionLabel(style)}` : `生成${getVersionLabel(style)}`; btn.disabled = false; }
-    alert('生成失败：' + e.message);
-  } finally {
-    currentStyle = prevStyle;
   }
 }
 
