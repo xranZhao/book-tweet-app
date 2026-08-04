@@ -596,7 +596,7 @@ def build_export_name(md_text, override_title=None, base_name=None, ext='html'):
     article_title = (override_title or base_name or '').strip()
     date_str = datetime.now().strftime('%y%m%d')
 
-    parts = [date_str, work_title, cp, article_title]
+    parts = [date_str, cp, work_title, article_title]
     safe_parts = []
     for p in parts:
         p = str(p).strip()

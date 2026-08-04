@@ -173,7 +173,7 @@ function buildExportMdName(md, articleTitle) {
   const dateStr = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const { workTitle, cp } = extractMdMeta(md);
   const shortCp = abbreviateCp(cp);
-  const parts = [dateStr, workTitle, shortCp, articleTitle || ''].map(p => String(p || '').trim().replace(/[\\/:*?"<>|]/g, '_')).filter(Boolean);
+  const parts = [dateStr, shortCp, workTitle, articleTitle || ''].map(p => String(p || '').trim().replace(/[\\/:*?"<>|]/g, '_')).filter(Boolean);
   return (parts.join('_') || '推文') + '.md';
 }
 
