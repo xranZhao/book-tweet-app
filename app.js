@@ -158,11 +158,22 @@ function extractMdMeta(md) {
   return { workTitle, cp };
 }
 
+function abbreviateCp(cp) {
+  if (!cp) return cp;
+  const parts = cp.trim().split(/\s*[×xX/&]\s*/).filter(Boolean);
+  if (parts.length >= 2) {
+    const first = s => s.replace(/^[\s《〈（"'\）】]+/, '').slice(0, 1);
+    return first(parts[0]) + first(parts[parts.length - 1]);
+  }
+  return cp;
+}
+
 function buildExportMdName(md, articleTitle) {
   const now = new Date();
   const dateStr = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const { workTitle, cp } = extractMdMeta(md);
-  const parts = [dateStr, workTitle, cp, articleTitle || ''].map(p => String(p || '').trim().replace(/[\\/:*?"<>|]/g, '_')).filter(Boolean);
+  const shortCp = abbreviateCp(cp);
+  const parts = [dateStr, workTitle, shortCp, articleTitle || ''].map(p => String(p || '').trim().replace(/[\\/:*?"<>|]/g, '_')).filter(Boolean);
   return (parts.join('_') || '推文') + '.md';
 }
 

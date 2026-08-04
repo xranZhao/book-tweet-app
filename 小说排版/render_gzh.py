@@ -564,6 +564,20 @@ def read_md(path):
         return f.read()
 
 
+def abbreviate_cp(cp):
+    """CP 简称：取两边第一个字。如'德拉科·马尔福 × 赫敏·格兰杰' → '德赫'。"""
+    if not cp or not isinstance(cp, str):
+        return cp
+    parts = re.split(r'\s*[×xX/&]\s*', cp.strip())
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= 2:
+        def first_char(s):
+            s = re.sub(r'^[\s《〈（"\'\）】]+', '', s)
+            return s[0] if s else ''
+        return f'{first_char(parts[0])}{first_char(parts[-1])}'
+    return cp
+
+
 def build_export_name(md_text, override_title=None, base_name=None, ext='html'):
     """按规范生成导出文件名：YYMMDD_小说名_CP名_文章标题"""
     clean = re.sub(r'\*\*(.+?)\*\*', r'\1', md_text)
@@ -577,6 +591,7 @@ def build_export_name(md_text, override_title=None, base_name=None, ext='html'):
     m = re.search(r'CP\s*[:：]\s*(.+)', clean)
     if m:
         cp = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        cp = abbreviate_cp(cp)
 
     article_title = (override_title or base_name or '').strip()
     date_str = datetime.now().strftime('%y%m%d')
