@@ -3,6 +3,11 @@ const $ = s => document.querySelector(s);
 const SETTINGS_KEY = 'book_tweet_config';
 function readLocal(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')??fallback;}catch{return fallback;}}
 const settings = { API_KEY:'', READ_MODEL:'deepseek-flash', WRITE_MODEL:'deepseek-v4-pro', ...readLocal(SETTINGS_KEY,{}) };
+// 将旧版默认目录迁移至推文专属目录，保留用户自定义目录。
+if (settings.githubPath == null || settings.githubPath.replace(/^\/+|\/+$/g, '') === '0-原始文稿') {
+  settings.githubPath = '0-原始文稿/磕学家';
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
 const fresh = () => ({id:crypto.randomUUID(),book:null,notes:[],report:'',draft:'',title:'',usage:[],uploaded:null});
 let state = fresh(), db, busy = false, paused = false, tab = 'upload';
 const CHUNK_SIZE = 50000;
