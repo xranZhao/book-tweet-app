@@ -372,3 +372,11 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .version-actions .btn {
   width: 100%;
 }
+/* 编辑器延续原有温暖配色。 */
+label { display:block; margin:16px 0; font-weight:600; }
+label input, label textarea { display:block; width:100%; margin-top:8px; padding:12px; border:1px solid var(--border); border-radius:8px; background:white; color:var(--text); font:inherit; }
+label textarea { min-height:90px; resize:vertical; }
+label .draft-editor { min-height:48vh; line-height:1.9; font-weight:400; }
+.screen > .btn, .card > .btn { margin-top:12px; }
+summary { cursor:pointer; padding:12px 0; font-weight:600; }
+button:disabled { opacity:.55; cursor:wait; }
