@@ -25,7 +25,7 @@ function screen(html) { $('#main').innerHTML=`<div class="screen">${html}</div>`
 function button(id,label,primary=true) {return `<button class="btn ${primary?'btn-primary':'btn-ghost'} btn-block" id="${id}">${label}</button>`;}
 function navTo(next) {if(busy){toast('请先暂停或等待当前任务完成');return;}tab=next;document.querySelectorAll('[data-tab]').forEach(e=>e.classList.toggle('active',e.dataset.tab===next));({upload:showImport,reading:showReading,editor:showEditor,history:showHistory}[next])();}
 function showImport() {
- screen(`<h2>选一本书</h2><p class="tip">完整阅读后，再决定要不要写推文。</p>${state.book?`<div class="card"><strong>${escapeHtml(state.book.title)}</strong><p>已读 ${state.notes.length} / ${splitBook(state.book.text).length} 段</p>${button('continue','继续这本书')}</div>`:''}<div class="card"><input type="file" id="book-file" accept=".txt,.md,.epub,.zip"><p class="tip">支持 TXT、Markdown、EPUB、ZIP。文件保存在此设备。</p>${button('import','导入书籍')}</div>`);
+ screen(`<h2>选一本书</h2><p class="tip">完整阅读后，再决定要不要写推文。</p>${state.book?`<div class="card"><strong>${escapeHtml(state.book.title)}</strong><p>已读 ${state.notes.length} / ${splitBook(state.book.text || '').length} 段</p>${button('continue','继续这本书')}</div>`:''}<div class="card"><input type="file" id="book-file" accept=".txt,.md,.epub,.zip"><p class="tip">支持 TXT、Markdown、EPUB、ZIP。文件保存在此设备。</p>${button('import','导入书籍')}</div>`);
  if($('#continue'))$('#continue').onclick=()=>navTo(state.draft?'editor':'reading');
  $('#import').onclick=async()=>{const file=$('#book-file').files[0];if(!file)return toast('请先选择文件');if(state.book&&!confirm('当前草稿和阅读进度将移入历史，再导入新书？'))return;
  try {const ext=file.name.split('.').pop().toLowerCase();let text;if(ext==='epub')text=await parseEpub(file);else if(ext==='zip')text=await parseZipText(file);else {const bytes=await file.arrayBuffer();text=new TextDecoder().decode(bytes);if(text.includes('\uFFFD'))text=new TextDecoder('gb18030').decode(bytes);}
@@ -33,7 +33,12 @@ function showImport() {
 }
 function cost() {return state.usage.reduce((a,u)=>a+(u.cost||0),0);}
 function showReading() {
- if(!state.book?.text)return screen('<p>这篇历史推文没有书籍正文，可前往编辑，或重新导入原书阅读。</p>');const chunks=splitBook(state.book.text);const remaining=state.book.text.length-(chunks[state.notes.length]?.start??state.book.text.length);const estimate=(remaining*.6/1e6+Math.max(0,chunks.length-state.notes.length)*1800*4/1e6)*1.2;
+ if(!state.book?.text){
+ screen(`<p>${state.book?'这篇历史推文没有书籍正文，可继续编辑，或选择下一本书。':'请先选择一本书。'}</p>${button('choose-book','去选书')}${state.draft?button('edit-history','继续编辑',false):''}`);
+ $('#choose-book').onclick=()=>navTo('upload');
+ if($('#edit-history'))$('#edit-history').onclick=()=>navTo('editor');
+ return;
+ }const chunks=splitBook(state.book.text);const remaining=state.book.text.length-(chunks[state.notes.length]?.start??state.book.text.length);const estimate=(remaining*.6/1e6+Math.max(0,chunks.length-state.notes.length)*1800*4/1e6)*1.2;
  screen(`<h2>${escapeHtml(state.book.title)}</h2><p>${(state.book.text.length/10000).toFixed(1)} 万字 · 已读 ${state.notes.length}/${chunks.length} 段</p><p class="tip">剩余阅读预估 ¥${estimate.toFixed(2)}～${(estimate*2).toFixed(2)}，另含汇总和写作费用。按中文比例估算，以实际用量为准。</p><p class="tip">已记录费用约 ¥${cost().toFixed(3)}。请保持页面打开；中断后可继续。</p>${state.report?`<details open><summary>阅读报告（含结局剧透）</summary><div class="report-card">${renderMarkdown(state.report)}</div></details><label>推文偏好（可不填）<textarea id="direction" placeholder="例如：重点写亲情，少剧透，语气轻快"></textarea></label>${button('generate',state.draft?'重新生成推文':'生成 800 字以内推文')}${state.draft?button('edit','继续编辑',false):''}`:button('read',state.notes.length?'继续完整阅读':'开始完整阅读')}`);
  if($('#read'))$('#read').onclick=runReading;if($('#generate'))$('#generate').onclick=generateDraft;if($('#edit'))$('#edit').onclick=()=>navTo('editor');
 }
@@ -64,9 +69,15 @@ let saveQueue=Promise.resolve();
 function queueSave(){saveQueue=saveQueue.catch(()=>{}).then(()=>save()).then(()=>archive()).catch(()=>toast('本地保存失败，请先复制文字备份'));return saveQueue;}
 function showEditor() {
  if(!state.draft)return screen('<p>阅读后点击“生成推文”，即可在这里编辑。</p>');
- screen(`<h2>编辑推文</h2><label>标题<input id="article-title" value="${escapeHtml(state.title)}"></label><label>正文<textarea id="draft" class="draft-editor">${escapeHtml(state.draft)}</textarea></label><p id="count" class="tip"></p><p id="cloud-status" role="status">${state.uploaded?'上次上传成功；再次上传会提交当前文字。':'修改自动保存在此设备。'}</p>${button('cloud','云上传')}${button('copy','复制文字',false)}`);
+ screen(`<h2>编辑推文</h2><label>标题<input id="article-title" value="${escapeHtml(state.title)}"></label><label>正文<textarea id="draft" class="draft-editor">${escapeHtml(state.draft)}</textarea></label><p id="count" class="tip"></p><p id="cloud-status" role="status">${state.uploaded?'上次上传成功；再次上传会提交当前文字。':'修改自动保存在此设备。'}</p>${button('cloud','云上传')}${button('copy','复制文字',false)}${state.uploaded?button('next-book','选下一本书',false):''}`);
  const update=()=>{$('#count').textContent=`${Array.from(state.draft).length} 字${Array.from(state.draft).length>800?' · 已超过800字，可自行精简':''}`;};update();
  $('#draft').oninput=e=>{state.draft=e.target.value;state.uploaded=null;update();queueSave();};$('#article-title').oninput=e=>{state.title=e.target.value;state.uploaded=null;queueSave();};$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(state.draft);toast('已复制');}catch{toast('复制失败，请长按正文选择复制');}};$('#cloud').onclick=uploadCloud;
+ if($('#next-book'))$('#next-book').onclick=async()=>{
+  if(busy)return;
+  busy=true;$('#next-book').disabled=true;
+  try{await saveQueue;await archive();const previous=state;state=fresh();try{await save();}catch(e){state=previous;throw e;}busy=false;navTo('upload');}
+  catch(e){busy=false;toast('保存失败，当前稿件已保留，请重试');showEditor();}
+ };
 }
 async function archive(){const history=await store('readonly',s=>s.get('history'))||[];const entry={...state};const i=history.findIndex(h=>h.id===state.id);if(i>=0)history[i]=entry;else history.unshift(entry);await store('readwrite',s=>s.put(history,'history'));}
 async function showHistory(){const history=await store('readonly',s=>s.get('history'))||[];screen(`<h2>历史推文</h2>${history.length?'':'<p>还没有保存的推文。</p>'}${history.map((h,i)=>`<div class="card"><strong>${escapeHtml(h.title||h.book?.title||'未命名')}</strong><p class="tip">${h.uploaded?'已上传':'本地保存'}</p>${button('history-'+i,'打开编辑',false)}</div>`).join('')}`);history.forEach((h,i)=>$('#history-'+i).onclick=async()=>{if(state.book)await archive();state={...fresh(),...h};await save();navTo('editor');});}
