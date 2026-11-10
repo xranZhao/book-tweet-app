@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>推文助手</title>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <div id="app">
     <header class="app-header">
-      <div><h1>推文助手</h1><div class="sub">一本书 · 一篇推文</div></div>
+      <div><h1>推文助手</h1><div class="sub">一本书 · 一篇推文 · v10</div></div>
       <button class="btn btn-ghost" id="btn-settings" style="padding:6px 10px;font-size:13px;">⚙️</button>
     </header>
     <main id="main"></main>
@@ -24,12 +24,30 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="file-parsers.js?v=9"></script>
-  <script src="cloud.js?v=9"></script>
-  <script src="app.js?v=9"></script>
+  <script src="file-parsers.js?v=10"></script>
+  <script src="cloud.js?v=10"></script>
+  <script src="app.js?v=10"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=9').catch(e => console.error('SW fail', e));
+      // 新缓存接管后重载页面，避免旧脚本继续留在内存中。
+      let reloading = false;
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && !reloading) {
+          reloading = true;
+          location.reload();
+        }
+      });
+      const checkUpdate = async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('sw.js', {updateViaCache:'none'});
+          await registration.update();
+        } catch (e) { console.error('更新检查失败', e); }
+      };
+      checkUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkUpdate();
+      });
     }
   </script>
 </body>
