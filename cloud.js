@@ -3,7 +3,7 @@ function renderCloudSettings(){ $('#cloud-settings').innerHTML=`<label>GitHub To
 function saveCloudSettings(){settings.githubToken=$('#github-token').value.trim();settings.githubRepo=$('#github-repo').value.trim();settings.githubPath=$('#github-path').value.trim().replace(/^\/+|\/+$/g,'');}
 function cloudFilename(title,id){const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'2-digit',month:'2-digit',day:'2-digit'}).format(new Date()).replace(/\D/g,'');return `${date}_${title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,90)||'推文'}_${id.slice(0,8)}.md`;}
 async function uploadCloud(){
- await saveQueue;if(!state.draft.trim()||!state.title.trim())return toast('请填写标题和正文');if(!settings.githubToken||!settings.githubRepo){toast('请先设置 GitHub Token 和稿件仓库');openSettings();return;}
+ await flushSaves();if(!state.draft.trim()||!state.title.trim())return toast('请填写标题和正文');if(!settings.githubToken||!settings.githubRepo){toast('请先设置 GitHub Token 和稿件仓库');openSettings();return;}
  if(!/^[\w.-]+\/[\w.-]+$/.test(settings.githubRepo))return toast('仓库格式应为 用户名/仓库名');
  busy=true;$('#cloud').disabled=true;$('#cloud-status').textContent='正在上传…';
  try{const filename=state.cloudFilename||cloudFilename(state.title,state.id);const path=[settings.githubPath,filename].filter(Boolean).join('/');const url=`https://api.github.com/repos/${settings.githubRepo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;const headers={Authorization:`Bearer ${settings.githubToken}`,Accept:'application/vnd.github+json'};const check=await fetch(url,{headers,signal:AbortSignal.timeout(30000)});let sha;

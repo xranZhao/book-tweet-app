@@ -55,19 +55,19 @@ $('#main .screen').prepend(box);
 async function recordModelError(error){state.modelError=safeError(error.name==='AbortError'?'请求超时；当前请求可能已计费，已完成的阅读段落仍保留。':error.message);try{await save();}catch{} }
 
 function button(id,label,primary=true) {return `<button class="btn ${primary?'btn-primary':'btn-ghost'} btn-block" id="${id}">${label}</button>`;}
-function navTo(next) {if(busy){toast('请先暂停或等待当前任务完成');return;}tab=next;document.querySelectorAll('[data-tab]').forEach(e=>e.classList.toggle('active',e.dataset.tab===next));({upload:showImport,reading:showReading,editor:showEditor,history:showHistory}[next])();}
+async function navTo(next) {if(busy){toast('请先暂停或等待当前任务完成');return;}await flushSaves();tab=next;document.querySelectorAll('[data-tab]').forEach(e=>e.classList.toggle('active',e.dataset.tab===next));({upload:showImport,reading:showReading,editor:showEditor,history:showHistory}[next])();}
 function showImport() {
  screen(`<h2>选一本书</h2><p class="tip">完整阅读后，再决定要不要写推文。</p>${state.book?`<div class="card"><strong>${escapeHtml(state.book.title)}</strong><p>${currentCard()?'看文卡已保存':'可继续查看或阅读'}</p>${button('continue','继续这本书')}</div>`:''}<div class="card"><input type="file" id="book-file" accept=".txt,.md,.epub,.zip"><p class="tip">支持 TXT、Markdown、EPUB、ZIP。文件保存在此设备。</p>${button('import','导入书籍')}</div>`);
- if($('#continue'))$('#continue').onclick=()=>navTo(state.draft?'editor':'reading');
+ if($('#continue'))$('#continue').onclick=()=>navTo(hasDraft()?'editor':'reading');
  $('#import').onclick=async()=>{const file=$('#book-file').files[0];if(!file)return toast('请先选择文件');if(state.book&&!confirm('当前草稿和阅读进度将移入历史，再导入新书？'))return;
  try {const ext=file.name.split('.').pop().toLowerCase();let text;if(ext==='epub')text=await parseEpub(file);else if(ext==='zip')text=await parseZipText(file);else {text=decodeBookBytes(await file.arrayBuffer());}
- if(!text?.trim())throw new Error('文件没有可读取的正文');await saveQueue;if(state.book)await archive();state=fresh();state.book={title:file.name.replace(/\.[^.]+$/,''),text,previewConfirmed:false};state.title=state.book.title;await save();navTo('reading');}catch(e){toast(e.message);}};
+ if(!text?.trim())throw new Error('文件没有可读取的正文');await flushSaves();if(state.book)await archive();state=fresh();state.book={title:file.name.replace(/\.[^.]+$/,''),text,previewConfirmed:false};state.title=state.book.title;await save();navTo('reading');}catch(e){toast(e.message);}};
 }
 function cost() {return state.usage.reduce((a,u)=>a+(u.cost||0),0);}
 function showRejection(){
  screen(`<h2>${escapeHtml(state.book?.title||state.title)}</h2><p>不推荐 · 仅保存本地记录，不调用写作模型或自动上传。</p><details><summary>查看阅读报告</summary>${renderMarkdown(state.report||'暂无报告')}</details><label>不推荐的原因<textarea id="rejection-reason" placeholder="例如：人物行为不合逻辑、节奏太慢，或者不符合我的口味">${escapeHtml(state.rejectionReason||'')}</textarea></label>${button('save-rejection','保存不推荐记录')}${button('rejection-next','选下一本书',false)}${state.book?.text?button('back-report','返回阅读报告',false):''}`);
  $('#rejection-reason').oninput=e=>{state.rejectionReason=e.target.value;queueSave();};
- const persist=async()=>{await saveQueue;state.rejectionReason=$('#rejection-reason').value;state.decision='not-recommended';state.rejectedAt=state.rejectedAt||new Date().toISOString();await save();await archive();};
+ const persist=async()=>{await flushSaves();state.rejectionReason=$('#rejection-reason').value;state.decision='not-recommended';state.rejectedAt=state.rejectedAt||new Date().toISOString();await save();await archive();};
  $('#save-rejection').onclick=async()=>{try{await persist();toast('不推荐记录已保存');}catch(e){toast('保存失败，请保留原因文字后重试');}};
  $('#rejection-next').onclick=async()=>{try{await persist();const previous=state;state=fresh();try{await save();}catch(e){state=previous;throw e;}navTo('upload');}catch(e){toast('保存失败，未切换书籍');}};
  if($('#back-report'))$('#back-report').onclick=()=>navTo('reading');
@@ -118,19 +118,39 @@ async function generateDraft() {
 看文卡：
 ${state.report}`,2000);
  if(Array.from(draft).length>800){draft=await chat(settings.WRITE_MODEL,`将下面推文精简到含标点不超过800字，目标650字。保留具体情节与原意，不新增事实，只输出正文：\n${draft}`,1600);}
- if(Array.from(draft).length>800)throw new Error('模型仍超过800字，未覆盖原稿，请重试');state.draft=draft;state.decision='recommended';state.uploaded=null;await save();await archive();tab='editor';}catch(e){await recordModelError(e);}finally{busy=false;navTo(tab==='editor'?'editor':'reading');}
+ if(Array.from(draft).length>800)throw new Error('模型仍超过800字，未覆盖原稿，请重试');state.draft=draft;state.draftStarted=true;state.decision='recommended';state.uploaded=null;await save();await archive();tab='editor';}catch(e){await recordModelError(e);}finally{busy=false;navTo(tab==='editor'?'editor':'reading');}
 }
-let saveQueue=Promise.resolve();
-function queueSave(){saveQueue=saveQueue.catch(()=>{}).then(()=>save()).then(()=>archive()).catch(()=>toast('本地保存失败，请先复制文字备份'));return saveQueue;}
+let saveQueue=Promise.resolve(),saveTimer=null,savePending=false;
+function hasDraft(){return !!(state.draftStarted||state.draft||state.decision==='recommended'||state.uploaded);}
+function queueSave(){
+ savePending=true;clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>flushSaves(),800);
+ return saveQueue;
+}
+function flushSaves(){
+ clearTimeout(saveTimer);saveTimer=null;
+ if(savePending){savePending=false;saveQueue=saveQueue.catch(()=>{}).then(()=>save()).then(()=>archive()).catch(()=>toast('本地保存失败，请先复制文字备份'));}
+ return saveQueue;
+}
+// 切到后台时尽早保存；不要依赖关闭页面时浏览器一定完成异步写入。
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSaves();});
+window.addEventListener('pagehide',()=>flushSaves());
+function bindEditorInput(element,apply){
+ let composing=false;
+ element.addEventListener('compositionstart',()=>{composing=true;clearTimeout(saveTimer);});
+ element.addEventListener('input',e=>{apply(e.target.value);savePending=true;if(!composing&&!e.isComposing)queueSave();});
+ element.addEventListener('compositionend',()=>{composing=false;apply(element.value);queueSave();});
+ element.addEventListener('blur',()=>{composing=false;apply(element.value);savePending=true;flushSaves();});
+}
 function showEditor() {
- if(!state.draft)return screen('<p>阅读后点击“生成推文”，即可在这里编辑。</p>');
+ if(!hasDraft())return screen('<p>阅读后点击“生成推文”，即可在这里编辑。</p>');
  screen(`<h2>编辑推文</h2><label>标题<input id="article-title" value="${escapeHtml(state.title)}"></label><label>正文<textarea id="draft" class="draft-editor">${escapeHtml(state.draft)}</textarea></label><p id="count" class="tip"></p><p id="cloud-status" role="status">${state.uploaded?'上次上传成功；再次上传会提交当前文字。':'修改自动保存在此设备。'}</p>${button('cloud','云上传')}${button('copy','复制文字',false)}${state.uploaded?button('next-book','选下一本书',false):''}`);
  const update=()=>{$('#count').textContent=`${Array.from(state.draft).length} 字${Array.from(state.draft).length>800?' · 已超过800字，可自行精简':''}`;};update();
- $('#draft').oninput=e=>{state.draft=e.target.value;state.uploaded=null;update();queueSave();};$('#article-title').oninput=e=>{state.title=e.target.value;state.uploaded=null;queueSave();};$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(state.draft);toast('已复制');}catch{toast('复制失败，请长按正文选择复制');}};$('#cloud').onclick=uploadCloud;
+ bindEditorInput($('#draft'),value=>{if(value===state.draft)return;state.draft=value;state.draftStarted=true;state.uploaded=null;update();});bindEditorInput($('#article-title'),value=>{if(value===state.title)return;state.title=value;state.uploaded=null;});$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(state.draft);toast('已复制');}catch{toast('复制失败，请长按正文选择复制');}};$('#cloud').onclick=uploadCloud;
  if($('#next-book'))$('#next-book').onclick=async()=>{
   if(busy)return;
   busy=true;$('#next-book').disabled=true;
-  try{await saveQueue;await archive();const previous=state;state=fresh();try{await save();}catch(e){state=previous;throw e;}busy=false;navTo('upload');}
+  try{await flushSaves();await archive();const previous=state;state=fresh();try{await save();}catch(e){state=previous;throw e;}busy=false;navTo('upload');}
   catch(e){busy=false;toast('保存失败，当前稿件已保留，请重试');showEditor();}
  };
 }
@@ -149,7 +169,7 @@ async function showHistory(){
   return `<button type="button" class="history-entry" id="history-${i}"><span class="history-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span><span class="history-time">${escapeHtml(historyTime(h))} · ${status}</span><span class="history-novel" title="${escapeHtml(novel)}">小说：${escapeHtml(novel)}</span></button>`;
  }).join('')}</div>`);
  history.forEach((h,i)=>$('#history-'+i).onclick=async()=>{
-  try{await saveQueue;if(state.book)await archive();state={...fresh(),...h,createdAt:h.createdAt||null};await save();if(state.decision==='not-recommended'){tab='reading';showRejection();}else navTo(state.draft?'editor':'reading');}
+  try{await flushSaves();if(state.book)await archive();state={...fresh(),...h,createdAt:h.createdAt||null};await save();if(state.decision==='not-recommended'){tab='reading';showRejection();}else navTo(hasDraft()?'editor':'reading');}
   catch(e){toast('打开失败，请重试；原历史记录仍保留');}
  });
 }
@@ -167,6 +187,6 @@ function openSettings(){
  $('#save-settings').onclick=()=>{readInputs();saveCloudSettings();localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));toast('设置已保存');navTo(tab);};
 }
 async function init(){try{db=await openDB();const saved=await store('readonly',s=>s.get('current'));if(saved)state={...fresh(),...saved,createdAt:saved.createdAt||null};else {const old=JSON.parse(localStorage.getItem('tweet_session')||'null');if(old?.book){state.createdAt=old.createdAt||null;state.book=old.book;state.title=old.selectedTitle||old.book.title;state.draft=old.finalMd||old.draftMd||'';await save();}const history=JSON.parse(localStorage.getItem('tweet_history')||'[]');if(history.length)await store('readwrite',s=>s.put(history.map(h=>({...fresh(),createdAt:h.createdAt||null,uploaded:h.uploaded||null,rejectedAt:h.rejectedAt||null,id:h.id||crypto.randomUUID(),title:h.title||h.bookTitle||'旧推文',draft:h.finalMd||h.markdown||h.md||h.draftMd||'',book:{title:h.bookTitle||h.title||'旧推文'}})),'history'));}
- if(settings.READ_MODEL==='deepseek-v4-flash')settings.READ_MODEL='deepseek-flash';document.querySelectorAll('[data-tab]').forEach(e=>e.onclick=()=>navTo(e.dataset.tab));$('#btn-settings').onclick=openSettings;navTo(state.draft?'editor':state.book?'reading':'upload');}catch(e){screen('<p>无法打开本地存储，请退出隐私模式或检查存储空间后重试。原有数据未删除。</p>');}}
+ if(settings.READ_MODEL==='deepseek-v4-flash')settings.READ_MODEL='deepseek-flash';document.querySelectorAll('[data-tab]').forEach(e=>e.onclick=()=>navTo(e.dataset.tab));$('#btn-settings').onclick=openSettings;navTo(hasDraft()?'editor':state.book?'reading':'upload');}catch(e){screen('<p>无法打开本地存储，请退出隐私模式或检查存储空间后重试。原有数据未删除。</p>');}}
 window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
 if(typeof module!=='undefined')module.exports={splitBook};else init();
