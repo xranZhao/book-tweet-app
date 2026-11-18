@@ -380,3 +380,13 @@ label .draft-editor { min-height:48vh; line-height:1.9; font-weight:400; }
 .screen > .btn, .card > .btn { margin-top:12px; }
 summary { cursor:pointer; padding:12px 0; font-weight:600; }
 button:disabled { opacity:.55; cursor:wait; }
+
+/* 紧凑历史条目：标题、时间状态、小说名，整项可点击。 */
+.history-list { display:grid; gap:10px; }
+.history-entry { display:block; width:100%; min-width:0; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--bg-card); color:var(--text); text-align:left; }
+.history-entry span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.history-title { font-size:15px; font-weight:650; line-height:1.5; }
+.history-time { margin-top:4px; font-size:12px; line-height:1.5; color:var(--text-light); }
+.history-novel { margin-top:3px; font-size:13px; line-height:1.5; color:var(--text-light); }
+.history-entry:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.history-entry:active { background:var(--bubble-ai); }

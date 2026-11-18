@@ -8,7 +8,7 @@ if (settings.githubPath == null || settings.githubPath.replace(/^\/+|\/+$/g, '')
   settings.githubPath = '0-原始文稿/磕学家';
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
-const fresh = () => ({id:crypto.randomUUID(),book:null,notes:[],report:'',draft:'',title:'',usage:[],uploaded:null,decision:'',rejectionReason:'',rejectedAt:null});
+const fresh = () => ({id:crypto.randomUUID(),createdAt:new Date().toISOString(),book:null,notes:[],report:'',draft:'',title:'',usage:[],uploaded:null,decision:'',rejectionReason:'',rejectedAt:null});
 let state = fresh(), db, busy = false, paused = false, tab = 'upload';
 const CHUNK_SIZE = 50000;
 function openDB() { return new Promise((resolve,reject)=>{const r=indexedDB.open('tweet-simple',1);r.onupgradeneeded=()=>r.result.createObjectStore('data');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
@@ -135,7 +135,24 @@ function showEditor() {
  };
 }
 async function archive(){const history=await store('readonly',s=>s.get('history'))||[];const entry={...state};const i=history.findIndex(h=>h.id===state.id);if(i>=0)history[i]=entry;else history.unshift(entry);await store('readwrite',s=>s.put(history,'history'));}
-async function showHistory(){const history=await store('readonly',s=>s.get('history'))||[];screen(`<h2>历史推文</h2>${history.length?'':'<p>还没有保存的推文。</p>'}${history.map((h,i)=>`<div class="card"><strong>${escapeHtml(h.title||h.book?.title||'未命名')}</strong><p class="tip">${h.decision==='not-recommended'?'不推荐 · '+escapeHtml(new Date(h.rejectedAt).toLocaleDateString('zh-CN')):h.uploaded?'已上传':'本地保存'}</p>${button('history-'+i,'打开编辑',false)}</div>`).join('')}`);history.forEach((h,i)=>$('#history-'+i).onclick=async()=>{if(state.book)await archive();state={...fresh(),...h};await save();if(state.decision==='not-recommended'){tab='reading';showRejection();}else navTo(state.draft?'editor':'reading');});}
+function historyTime(entry){
+ const value=[entry.createdAt,entry.uploaded,entry.rejectedAt,entry.updatedAt].find(v=>v&&Number.isFinite(new Date(v).getTime()));
+ if(!value)return '时间未记录';
+ return new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value));
+}
+async function showHistory(){
+ const history=await store('readonly',s=>s.get('history'))||[];
+ screen(`<h2>历史推文</h2>${history.length?'':'<p>还没有保存的推文。</p>'}<div class="history-list">${history.map((h,i)=>{
+  const title=h.title||h.book?.title||'未命名';
+  const novel=h.book?.title||h.bookTitle||'小说名未记录';
+  const status=h.decision==='not-recommended'?'不推荐':h.uploaded?'已上传':'本地保存';
+  return `<button type="button" class="history-entry" id="history-${i}"><span class="history-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span><span class="history-time">${escapeHtml(historyTime(h))} · ${status}</span><span class="history-novel" title="${escapeHtml(novel)}">小说：${escapeHtml(novel)}</span></button>`;
+ }).join('')}</div>`);
+ history.forEach((h,i)=>$('#history-'+i).onclick=async()=>{
+  try{await saveQueue;if(state.book)await archive();state={...fresh(),...h,createdAt:h.createdAt||null};await save();if(state.decision==='not-recommended'){tab='reading';showRejection();}else navTo(state.draft?'editor':'reading');}
+  catch(e){toast('打开失败，请重试；原历史记录仍保留');}
+ });
+}
 function openSettings(){
  if(busy)return toast('请先等待当前任务完成');
  screen(`<h2>设置</h2><label>DeepSeek API Key<input type="password" id="api-key" value="${escapeHtml(settings.API_KEY)}" autocomplete="off"></label><p class="tip">密钥只保存在此设备。</p><label>阅读模型<input id="read-model" value="${escapeHtml(settings.READ_MODEL)}"></label><label>写作模型<input id="write-model" value="${escapeHtml(settings.WRITE_MODEL)}"></label>${button('test-model','测试阅读模型连接',false)}<p class="tip">仅发送一句测试文字，产生少量 API 费用，不发送小说、不改阅读进度。</p><pre id="test-result" style="white-space:pre-wrap;overflow-wrap:anywhere" role="status"></pre><div id="cloud-settings"></div>${button('save-settings','保存设置')}`);
@@ -149,7 +166,7 @@ function openSettings(){
  };
  $('#save-settings').onclick=()=>{readInputs();saveCloudSettings();localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));toast('设置已保存');navTo(tab);};
 }
-async function init(){try{db=await openDB();const saved=await store('readonly',s=>s.get('current'));if(saved)state={...fresh(),...saved};else {const old=JSON.parse(localStorage.getItem('tweet_session')||'null');if(old?.book){state.book=old.book;state.title=old.selectedTitle||old.book.title;state.draft=old.finalMd||old.draftMd||'';await save();}const history=JSON.parse(localStorage.getItem('tweet_history')||'[]');if(history.length)await store('readwrite',s=>s.put(history.map(h=>({...fresh(),id:h.id||crypto.randomUUID(),title:h.title||h.bookTitle||'旧推文',draft:h.finalMd||h.markdown||h.md||h.draftMd||'',book:{title:h.bookTitle||h.title||'旧推文'}})),'history'));}
+async function init(){try{db=await openDB();const saved=await store('readonly',s=>s.get('current'));if(saved)state={...fresh(),...saved,createdAt:saved.createdAt||null};else {const old=JSON.parse(localStorage.getItem('tweet_session')||'null');if(old?.book){state.createdAt=old.createdAt||null;state.book=old.book;state.title=old.selectedTitle||old.book.title;state.draft=old.finalMd||old.draftMd||'';await save();}const history=JSON.parse(localStorage.getItem('tweet_history')||'[]');if(history.length)await store('readwrite',s=>s.put(history.map(h=>({...fresh(),createdAt:h.createdAt||null,uploaded:h.uploaded||null,rejectedAt:h.rejectedAt||null,id:h.id||crypto.randomUUID(),title:h.title||h.bookTitle||'旧推文',draft:h.finalMd||h.markdown||h.md||h.draftMd||'',book:{title:h.bookTitle||h.title||'旧推文'}})),'history'));}
  if(settings.READ_MODEL==='deepseek-v4-flash')settings.READ_MODEL='deepseek-flash';document.querySelectorAll('[data-tab]').forEach(e=>e.onclick=()=>navTo(e.dataset.tab));$('#btn-settings').onclick=openSettings;navTo(state.draft?'editor':state.book?'reading':'upload');}catch(e){screen('<p>无法打开本地存储，请退出隐私模式或检查存储空间后重试。原有数据未删除。</p>');}}
 window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
 if(typeof module!=='undefined')module.exports={splitBook};else init();
