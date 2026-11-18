@@ -81,7 +81,7 @@ async function parseZipText(file) {
   });
   if (!candidates.length) throw new Error('zip 里没找到 txt 文件');
   candidates.sort((a, b) => (b.obj._data?.uncompressedSize || 0) - (a.obj._data?.uncompressedSize || 0));
-  return await candidates[0].obj.async('text');
+  return decodeBookBytes(await candidates[0].obj.async('uint8array'));
 }
 
 function readFirstBytes(file, n) {
@@ -106,3 +106,27 @@ function htmlToText(html) {
   return (doc.body.textContent || '').replace(/\n\s*\n+/g, '\n\n').trim();
 }
 
+// 按字节识别编码，ZIP 内的文字也走同一套流程。
+function decodeBookBytes(input) {
+ const bytes=new Uint8Array(input);
+ let encoding;
+ if(bytes[0]===0xFF&&bytes[1]===0xFE)encoding='utf-16le';
+ else if(bytes[0]===0xFE&&bytes[1]===0xFF)encoding='utf-16be';
+ else if(bytes[0]===0xEF&&bytes[1]===0xBB&&bytes[2]===0xBF)encoding='utf-8';
+ else {
+  const sample=bytes.slice(0,4000);let even=0,odd=0;
+  sample.forEach((b,i)=>{if(b===0)(i%2?odd++:even++);});
+  if(odd>sample.length*.2&&even<sample.length*.05)encoding='utf-16le';
+  else if(even>sample.length*.2&&odd<sample.length*.05)encoding='utf-16be';
+ }
+ if(encoding)return new TextDecoder(encoding,{fatal:true}).decode(bytes);
+ try{return new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
+ catch{return new TextDecoder('gb18030',{fatal:true}).decode(bytes);}
+}
+function bookTextProblem(text) {
+ const bad=(text.match(/\uFFFD/g)||[]).length;
+ const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
+ if(!text.trim())return '文件没有可读取的正文。';
+ if(bad>Math.max(3,text.length*.002)||controls>Math.max(3,text.length*.001))return '正文疑似乱码，已暂停付费阅读。请重新导入原文件，并核对下方正文预览。';
+ return '';
+}
